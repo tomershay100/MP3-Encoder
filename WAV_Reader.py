@@ -1,37 +1,6 @@
 import struct
 import sys
-
-BIT_RATES = [
-    # MPEG version:
-    # 2.5, reserved, II, I
-    (-1, -1, -1, -1),
-    (8, -1, 8, 32),
-    (16, -1, 16, 40),
-    (24, -1, 24, 48),
-    (32, -1, 32, 56),
-    (40, -1, 40, 64),
-    (48, -1, 48, 80),
-    (56, -1, 56, 96),
-    (64, -1, 64, 112),
-    (-1, -1, 80, 128),
-    (-1, -1, 96, 160),
-    (-1, -1, 112, 192),
-    (-1, -1, 128, 224),
-    (-1, -1, 144, 256),
-    (-1, -1, 160, 320),
-    (-1, -1, -1, -1)
-]
-SAMPLE_RATES = [
-    44100, 48000, 32000,  # MPEG - I
-    22050, 24000, 16000,  # MPEG - II
-    11025, 12000, 8000  # MPEG - 2.5
-]
-MODES = {
-    0: "STEREO",
-    1: "JOINT STEREO",
-    2: "DUAL CHANNEL",
-    3: "MONO"
-}
+import util
 
 
 class WavReader:
@@ -42,8 +11,8 @@ class WavReader:
 
         self.__read_header()
 
-        self.check_bitrate_index(self.__bitrate, self.__mpeg_version)
-        self.check_samplerate_index(self.__samplerate)
+        self.check_bitrate_index()
+        self.check_samplerate_index()
 
     # Reads the header information to check if it is a valid file with PCM audio samples.
     def __read_header(self):
@@ -75,9 +44,9 @@ class WavReader:
         idx += 2
         self.__num_of_ch = struct.unpack('<H', buffer[idx:idx + 2])[0]  # bytes 23 - 24
         if self.__num_of_ch > 1:  # Set to stereo mode if wave data is stereo, mono otherwise.
-            self.__mpeg_mode = MODES[self.__num_of_ch]
+            self.__mpeg_mode = self.__num_of_ch
         else:
-            self.__mpeg_mode = "MONO"
+            self.__mpeg_mode = util.MODES["MONO"]
 
         idx += 2
         self.__samplerate = struct.unpack('<I', buffer[idx:idx + 4])[0]  # bytes 25 - 28
@@ -128,18 +97,34 @@ class WavReader:
                          self.__modext << 4 | self.__copyright << 3 |
                          self.__original << 2 | self.__emphasis)
 
-    @staticmethod
-    def check_bitrate_index(bitrate, mpeg_version):
-        for i in range(16):
-            if bitrate == BIT_RATES[i][mpeg_version]:
-                return
+    def check_bitrate_index(self):
+        if util.find_bitrate_index(self.__bitrate, self.__mpeg_version) <= 0:
+            sys.exit("Unsupported bitrate configuration.")  # error - not a valid bitrate for encoder
 
-        sys.exit("Unsupported bitrate configuration.")  # error - not a valid bitrate for encoder
+    def check_samplerate_index(self):
+        if util.find_samplerate_index(self.__samplerate) <= 0:
+            sys.exit("Unsupported samplerate configuration.")  # error - not a valid samplerate for encoder
 
-    @staticmethod
-    def check_samplerate_index(samplerate):
-        for i in range(9):
-            if samplerate == SAMPLE_RATES[i]:
-                return
+    @property
+    def mpeg_mode(self):
+        return self.__mpeg_mode
 
-        sys.exit("Unsupported samplerate configuration.")  # error - not a valid samplerate for encoder
+    @property
+    def bitrate(self):
+        return self.__bitrate
+
+    @property
+    def emphasis(self):
+        return self.__emphasis
+
+    @property
+    def copyright(self):
+        return self.__copyright
+
+    @property
+    def original(self):
+        return self.__original
+
+    @property
+    def samplerate(self):
+        return self.__samplerate
