@@ -1,6 +1,7 @@
 import os
 import sys
 
+from MP3_Encoder import MP3Encoder
 from WAV_Reader import WavReader
 
 if __name__ == "__main__":
@@ -14,5 +15,5 @@ if __name__ == "__main__":
         sys.exit('File not found.')
     # default_mpeg = {"bit_rate": 64, "emp": None, "copyright": 0, "original": 1}
     wav_file = WavReader(file_path)
-    # encoder = MP3Encoder(wav_file)
+    encoder = MP3Encoder(wav_file)
     # encoder.encode()

@@ -27,10 +27,10 @@ SAMPLE_RATES = [
     11025, 12000, 8000  # MPEG - 2.5
 ]
 MODES = {
-    "STEREO": 0,
-    "JOINT STEREO": 1,
-    "DUAL CHANNEL": 2,
-    "MONO": 3
+    0: "STEREO",
+    1: "JOINT STEREO",
+    2: "DUAL CHANNEL",
+    3: "MONO"
 }
 
 
@@ -75,7 +75,7 @@ class WavReader:
         idx += 2
         self.__num_of_ch = struct.unpack('<H', buffer[idx:idx + 2])[0]  # bytes 23 - 24
         if self.__num_of_ch > 1:  # Set to stereo mode if wave data is stereo, mono otherwise.
-            self.__mpeg_mode = "STEREO"
+            self.__mpeg_mode = MODES[self.__num_of_ch]
         else:
             self.__mpeg_mode = "MONO"
 
