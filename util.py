@@ -45,6 +45,14 @@ MPEG_VERSIONS = {
     "MPEG_25": 0
 }
 
+GRANULES_PER_FRAME = [
+    1,  # MPEG 2.5
+    -1,  # Reserved
+    1,  # MPEG II
+    2  # MPEG I
+]
+GRANULES_SIZE = 576
+
 
 def find_bitrate_index(bitrate, mpeg_version):
     for i in range(16):

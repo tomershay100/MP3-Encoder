@@ -63,7 +63,7 @@ class MP3Encoder:
         self.__resv_max = 0
         self.__resv_size = 0
 
-        self.__mpeg.layer = 3  # Only Layer III currently implemented.
+        self.__mpeg.layer = 1  # Only Layer III currently implemented.
         self.__mpeg.crc = 0
         self.__mpeg.ext = 0
         self.__mpeg.mode_ext = 0
@@ -71,7 +71,20 @@ class MP3Encoder:
 
         self.__mpeg.samplerate_index = util.find_samplerate_index(wav_file.samplerate)
         self.__mpeg.version = util.find_mpeg_version(self.__mpeg.samplerate_index)
+        self.__mpeg.bitrate_index = util.find_bitrate_index(self.__mpeg.bitrate, self.__mpeg.version)
+        self.__mpeg.granules_per_frame = util.GRANULES_PER_FRAME[self.__mpeg.version]
 
+        # Figure average number of 'slots' per frame.
+        avg_slots_per_frame = (float(self.__mpeg.granules_per_frame) * util.GRANULES_SIZE / float(
+            wav_file.samplerate)) * (1000 * float(self.__mpeg.bitrate) / float(self.__mpeg.bits_per_slot))
+
+        self.__mpeg.whole_slots_per_frame = int(avg_slots_per_frame)
+
+        self.__mpeg.frac_slots_per_frame = avg_slots_per_frame - float(self.__mpeg.whole_slots_per_frame)
+        self.__mpeg.slot_lag = - self.__mpeg.frac_slots_per_frame
+
+        if self.__mpeg.frac_slots_per_frame == 0:
+            self.__mpeg.padding = 0
 
         pass
 

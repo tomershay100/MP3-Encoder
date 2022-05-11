@@ -90,19 +90,12 @@ class WavReader:
         self.__pad_bit = 0
         self.__rest = 0
 
-        self.__header = (self.__sync_word << 21 | self.__mpeg_version << 19 |
-                         self.__layer << 17 | self.__crc << 16 |
-                         self.__bitrate << 7 | self.__sample_rate_code << 10 |
-                         self.__pad_bit << 9 | self.__chmode << 6 |
-                         self.__modext << 4 | self.__copyright << 3 |
-                         self.__original << 2 | self.__emphasis)
-
     def check_bitrate_index(self):
-        if util.find_bitrate_index(self.__bitrate, self.__mpeg_version) <= 0:
+        if util.find_bitrate_index(self.__bitrate, self.__mpeg_version) < 0:
             sys.exit("Unsupported bitrate configuration.")  # error - not a valid bitrate for encoder
 
     def check_samplerate_index(self):
-        if util.find_samplerate_index(self.__samplerate) <= 0:
+        if util.find_samplerate_index(self.__samplerate) < 0:
             sys.exit("Unsupported samplerate configuration.")  # error - not a valid samplerate for encoder
 
     @property
