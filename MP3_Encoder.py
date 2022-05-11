@@ -48,6 +48,55 @@ class MPEG:
     original: int = 0
 
 
+@dataclass
+class BitstreamStruct:
+    data: []
+    data_size: int = 0
+    data_position: int = 0
+    cache: int = 0
+    cache_bits: int = 0
+
+
+@dataclass
+class GrInfo:
+    part2_3_length: int
+    big_values: int
+    count1: int
+    global_gain: int
+    scalefac_compress: int
+    table_select: []
+    region0_count: int
+    region1_count: int
+    preflag: int
+    scalefac_scale: int
+    count1table_select: int
+    part2_length: int
+    sfb_lmax: int
+    address1: int
+    address2: int
+    address3: int
+    quantizerStepSize: int
+    slen: []
+
+
+@dataclass
+class CH:
+    tt: GrInfo
+
+
+@dataclass
+class GR:
+    ch: [CH] = [CH] * util.MAX_CHANNELS
+
+
+@dataclass
+class SideInfo:
+    private_bits: int
+    resvDrain: int
+    scfsi: [] = [[0] * 4] * util.MAX_CHANNELS
+    gr: [GR] = [GR] * util.MAX_CHANNELS
+
+
 class MP3Encoder:
     def __init__(self, wav_file: WavReader):
         self.__subband_initialise()
@@ -85,6 +134,14 @@ class MP3Encoder:
 
         if self.__mpeg.frac_slots_per_frame == 0:
             self.__mpeg.padding = 0
+
+        self.__bitstream = BitstreamStruct([b''] * util.BUFFER_SIZE, util.BUFFER_SIZE, 0, 0, 32)
+
+        self.__side_info = SideInfo()
+        if self.__mpeg.granules_per_frame == 2:  # MPEG 1
+            self.__side_info_len = 8 * ((4 + 17) if wav_file.num_of_channels == 1 else (4 + 32))
+        else:  # MPEG 2
+            self.__side_info_len = 8 * ((4 + 9) if wav_file.num_of_channels == 1 else (4 + 17))
 
         pass
 

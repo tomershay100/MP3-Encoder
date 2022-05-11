@@ -121,3 +121,7 @@ class WavReader:
     @property
     def samplerate(self):
         return self.__samplerate
+
+    @property
+    def num_of_channels(self):
+        return self.__num_of_ch

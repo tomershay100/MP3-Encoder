@@ -7,6 +7,8 @@ PI36 = 0.087266462599717
 PI64 = 0.049087385212
 LN2 = 0.69314718
 
+BUFFER_SIZE = 4096
+
 BIT_RATES = [
     # MPEG version:
     # 2.5, reserved, II, I
