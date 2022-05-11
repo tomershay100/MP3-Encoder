@@ -1,4 +1,6 @@
 MAX_CHANNELS = 2
+MAX_GRANULES = 2
+GRANULE_SIZE = 576
 
 SBLIMIT = 32
 HAN_SIZE = 512  # for loop unrolling, require that HAN_SIZE%8==0
