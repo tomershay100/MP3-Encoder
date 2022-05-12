@@ -324,6 +324,6 @@ class MP3Encoder:
     def __window_filter_subband(self, buffer, s, ch):
         y = [0] * 64
         # replace 32 oldest samples with 32 new samples
-        for i in range(32 - 1,-1,-1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer) << 16 # TODO
+        for i in range(32 - 1, -1, -1):
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer) << 16  # TODO check for validity
         pass
