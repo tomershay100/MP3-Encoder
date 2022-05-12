@@ -3,6 +3,7 @@ import math
 
 from WAV_Reader import WavReader
 import util
+import numpy as np
 
 
 @dataclass
@@ -12,9 +13,9 @@ class Subband:
     x: []
 
     def __init__(self):
-        self.off = [0] * util.MAX_CHANNELS
-        self.fl = [[0] * 64] * util.SBLIMIT
-        self.x = [[0] * util.HAN_SIZE] * util.MAX_CHANNELS
+        self.off = np.zeros(util.MAX_CHANNELS, dtype=np.int32)
+        self.fl = np.zeros((util.SBLIMIT, 64), dtype=np.int32)
+        self.x = np.zeros((util.MAX_CHANNELS, util.HAN_SIZE), dtype=np.int32)
 
 
 @dataclass
@@ -22,7 +23,7 @@ class MDCT:
     cos_l: []
 
     def __init__(self):
-        self.cos_l = [[0] * 36] * 18
+        self.cos_l = np.zeros((18, 36), dtype=np.int32)
 
 
 @dataclass
@@ -79,8 +80,8 @@ class GrInfo:
     quantizerStepSize: int = 0
 
     def __init__(self):
-        self.table_select = [0] * 3
-        self.slen = [0] * 4
+        self.table_select = np.zeros(3, dtype=np.int32)
+        self.slen = np.zeros(4, dtype=np.int32)
 
 
 @dataclass
@@ -96,7 +97,7 @@ class GR:
     ch: []
 
     def __init__(self):
-        self.ch = [CH()] * util.MAX_CHANNELS
+        self.ch = [CH() for _ in range(util.MAX_CHANNELS)]
 
 
 @dataclass
@@ -107,8 +108,8 @@ class SideInfo:
     resvDrain: int = 0
 
     def __init__(self):
-        self.gr = [GR()] * util.MAX_GRANULES
-        self.scfsi = [[0] * 4] * util.MAX_CHANNELS
+        self.gr = [GR() for _ in range(util.MAX_GRANULES)]
+        self.scfsi = np.zeros((util.MAX_CHANNELS, 4), dtype=np.int32)
 
 
 @dataclass
@@ -117,13 +118,13 @@ class ScaleFactor:
     s: []  # [window][cb]
 
     def __init__(self):
-        self.l = [[[0] * 22] * util.MAX_CHANNELS] * util.MAX_CHANNELS
-        self.s = [[[[0] * 3] * 13] * util.MAX_CHANNELS] * util.MAX_CHANNELS
+        self.l = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 22), dtype=np.int32)  # [cb]
+        self.s = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 13, 3), dtype=np.int32)  # [window][cb]
 
 
 @dataclass
 class L3Loop:
-    xr: int  # magnitudes of the spectral values
+    xr: int  # a pointer of the magnitudes of the spectral values
     xrsq: []  # xr squared
     xrabs: []  # xr absolute
     xrmax: int  # maximum of xrabs array
@@ -136,15 +137,15 @@ class L3Loop:
     int2idx: []  # x**(3/4)   for x = 0..9999
 
     def __init__(self):
-        self.xrsq = [0] * util.GRANULE_SIZE
-        self.xrabs = [0] * util.GRANULE_SIZE
-        self.en_tot = [0] * util.GRANULE_SIZE
-        self.en = [[0] * 21] * util.MAX_GRANULES
-        self.xm = [[0] * 21] * util.MAX_GRANULES
-        self.xrmaxl = [0] * util.MAX_GRANULES
-        self.steptab = [0.0] * 128
-        self.steptabi = [0] * 128
-        self.int2idx = [0] * 10000
+        self.xrsq = np.zeros(util.GRANULE_SIZE, dtype=np.int32)
+        self.xrabs = np.zeros(util.GRANULE_SIZE, dtype=np.int32)
+        self.en_tot = np.zeros(util.MAX_GRANULES, dtype=np.int32)
+        self.en = np.zeros((util.MAX_GRANULES, 21), dtype=np.int32)
+        self.xm = np.zeros((util.MAX_GRANULES, 21), dtype=np.int32)
+        self.xrmaxl = np.zeros(util.MAX_GRANULES, dtype=np.int32)
+        self.steptab = np.zeros(128, dtype=np.double)
+        self.steptabi = np.zeros(128, dtype=np.int32)
+        self.int2idx = np.zeros(10000, dtype=np.int32)
 
 
 class MP3Encoder:
@@ -152,13 +153,14 @@ class MP3Encoder:
         self.__wav_file = wav_file
         # Compute default encoding values.
         self.__mean_bits = 0
-        self.__ratio = [[[0.0] * 21] * util.MAX_CHANNELS] * util.MAX_CHANNELS
+        self.__ratio = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
         self.__scalefactor = ScaleFactor()
-        self.__buffer = [0] * util.MAX_CHANNELS
-        self.__pe = [[0] * util.MAX_GRANULES] * util.MAX_CHANNELS
-        self.__l3_enc = [[[0] * util.GRANULE_SIZE] * util.MAX_GRANULES] * util.MAX_CHANNELS
-        self.__l3_sb_sample = [[[[0] * util.SBLIMIT] * 18] * (util.MAX_GRANULES + 1)] * util.MAX_CHANNELS
-        self.__mdct_freq = [[[0] * util.GRANULE_SIZE] * util.MAX_GRANULES] * util.MAX_CHANNELS
+        self.__buffer = np.zeros(util.MAX_CHANNELS, dtype=np.int16)
+        self.__pe = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES), dtype=np.double)
+        self.__l3_enc = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE), dtype=np.int32)
+        self.__l3_sb_sample = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES + 1, 18, util.SBLIMIT),
+                                       dtype=np.int32)
+        self.__mdct_freq = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE), dtype=np.int32)
         self.__l3loop = L3Loop()
         self.__mdct = MDCT()
         self.__subband = Subband()
@@ -201,7 +203,7 @@ class MP3Encoder:
         if self.__mpeg.frac_slots_per_frame == 0:
             self.__mpeg.padding = 0
 
-        self.__bitstream = BitstreamStruct([b''] * util.BUFFER_SIZE, util.BUFFER_SIZE, 0, 0, 32)
+        self.__bitstream = BitstreamStruct([b'' for _ in range(util.BUFFER_SIZE)], util.BUFFER_SIZE, 0, 0, 32)
 
         # determine the mean bitrate for main data
         if self.__mpeg.granules_per_frame == 2:  # MPEG 1
@@ -271,7 +273,7 @@ class MP3Encoder:
 
         # All the magic happens here
         total_sample_count = self.__wav_file.num_of_samples * self.__wav_file.num_of_channels
-        count = total_sample_count / samples_per_pass
+        count = total_sample_count // samples_per_pass
 
         buf = 0
         for i in range(count):
@@ -303,8 +305,8 @@ class MP3Encoder:
     def __shine_mdct_sub(self):
         # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
         # [2][2][32][18]. (32*18=576),
-        mdct_enc = [0] * 18
-        mdct_in = [0] * 36
+        mdct_enc = np.zeros(18, dtype=np.int32)
+        mdct_in = np.zeros(36, dtype=np.int32)
 
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
             for gr in range(self.__mpeg.granules_per_frame):
@@ -322,7 +324,7 @@ class MP3Encoder:
                         self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
 
     def __window_filter_subband(self, buffer, s, ch):
-        y = [0] * 64
+        y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
             self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer) << 16  # TODO check for validity
