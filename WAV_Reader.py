@@ -129,3 +129,7 @@ class WavReader:
     @property
     def file_path(self):
         return self.__file_path
+
+    @property
+    def num_of_samples(self):
+        return self.__num_of_samples

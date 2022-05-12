@@ -154,7 +154,7 @@ class MP3Encoder:
         self.__mean_bits = 0
         self.__ratio = [[[0.0] * 21] * util.MAX_CHANNELS] * util.MAX_CHANNELS
         self.__scalefactor = ScaleFactor()
-        self.__buffer = [None] * util.MAX_CHANNELS
+        self.__buffer = [0] * util.MAX_CHANNELS
         self.__pe = [[0] * util.MAX_GRANULES] * util.MAX_CHANNELS
         self.__l3_enc = [[[0] * util.GRANULE_SIZE] * util.MAX_GRANULES] * util.MAX_CHANNELS
         self.__l3_sb_sample = [[[[0] * util.SBLIMIT] * 18] * (util.MAX_GRANULES + 1)] * util.MAX_CHANNELS
@@ -270,7 +270,60 @@ class MP3Encoder:
         samples_per_pass = self.__samples_per_pass() * self.__wav_file.num_of_channels
 
         # All the magic happens here
-        count = self.__wav_file.samplerate / samples_per_pass
+        total_sample_count = self.__wav_file.num_of_samples * self.__wav_file.num_of_channels
+        count = total_sample_count / samples_per_pass
+
+        buf = 0
+        for i in range(count):
+            self.__buffer[0] = buf
+            if self.__wav_file.num_of_channels == 2:
+                self.__buffer[1] = buf + 1
+            data = self.__encode_buffer_internal()
 
     def __samples_per_pass(self):
         return self.__mpeg.granules_per_frame * util.GRANULE_SIZE
+
+    def __encode_buffer_internal(self):
+        if self.__mpeg.frac_slots_per_frame:
+            self.__mpeg.padding = (1 if self.__mpeg.slot_lag <= (self.__mpeg.frac_slots_per_frame - 1.0) else 0)
+            self.__mpeg.slot_lag += self.__mpeg.padding - self.__mpeg.frac_slots_per_frame
+
+        self.__mpeg.bits_per_frame = 8 * self.__mpeg.whole_slots_per_frame + self.__mpeg.padding
+        self.__mpeg.mean_bits = (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame
+
+        # apply mdct to the polyphase output
+        self.__shine_mdct_sub()
+
+        # bit and noise allocation
+
+        # write the frame to the bitstream
+
+        pass
+
+    def __shine_mdct_sub(self):
+        # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
+        # [2][2][32][18]. (32*18=576),
+        mdct_enc = [0] * 18
+        mdct_in = [0] * 36
+
+        for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
+            for gr in range(self.__mpeg.granules_per_frame):
+                # set up pointer to the part of config->mdct_freq we're using
+                mdct_enc = self.__mdct_freq[ch][gr]
+
+                # polyphase filtering
+                for k in range(18, 2):
+                    self.__window_filter_subband(self.__buffer[ch], self.__l3_sb_sample[ch][gr + 1][k][0], ch)
+                    self.__window_filter_subband(self.__buffer[ch], self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
+
+                    # Compensate for inversion in the analysis filter
+                    # (every odd index of band AND k)
+                    for band in range(32, 2, 1):
+                        self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
+
+    def __window_filter_subband(self, buffer, s, ch):
+        y = [0] * 64
+        # replace 32 oldest samples with 32 new samples
+        for i in range(32 - 1,-1,-1):
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer) << 16 # TODO
+        pass
