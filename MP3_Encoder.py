@@ -252,3 +252,16 @@ class MP3Encoder:
         # The 0.5 is for rounding, the .0946 comes from the spec.
         for i in range(128 - 1, -1, -1):
             self.__l3loop.int2idx[i] = int(math.sqrt(math.sqrt(float(i)) * float(i)) - 0.0946 + 0.5)
+
+    def print_info(self):
+        # Print some info about the file about to be created
+        version_names = ["2.5", "reserved", "II", "I"]
+        mode_names = ["stereo", "joint-stereo", "dual-channel", "mono"]
+        demp_names = ["none", "50/15us", "", "CITT"]
+
+        print(f"MPEG-{version_names[self.__mpeg.version]} layer III, {mode_names[self.__mpeg.mode]}"
+              f" Psychoacoustic Model: Shine")
+        print(f"Bitrate: {self.__mpeg.bitrate} kbps ", end='')
+        print(f"De-emphasis: {demp_names[self.__mpeg.emphasis]}\t{'Original' if self.__mpeg.original else ''}\t"
+              f"{'(C)' if self.__mpeg.copyright else ''}")
+        print(f"Encoding \"{self.__wav_file.file_path}\" to \"{self.__wav_file.file_path[:-3]}mp3\"\n")
