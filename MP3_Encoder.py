@@ -265,3 +265,12 @@ class MP3Encoder:
         print(f"De-emphasis: {demp_names[self.__mpeg.emphasis]}\t{'Original' if self.__mpeg.original else ''}\t"
               f"{'(C)' if self.__mpeg.copyright else ''}")
         print(f"Encoding \"{self.__wav_file.file_path}\" to \"{self.__wav_file.file_path[:-3]}mp3\"\n")
+
+    def encode(self):
+        samples_per_pass = self.__samples_per_pass() * self.__wav_file.num_of_channels
+
+        # All the magic happens here
+        count = self.__wav_file.samplerate / samples_per_pass
+
+    def __samples_per_pass(self):
+        return self.__mpeg.granules_per_frame * util.GRANULE_SIZE
