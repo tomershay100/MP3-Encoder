@@ -30,9 +30,9 @@ class MPEG:
     version: int = 0
     layer: int = 0
     granules_per_frame: int = 0
-    mode: int = 0
+    mode: int = 0  # Stereo mode
     bitrate: int = 0
-    emphasis: int = 0
+    emphasis: int = 0  # De-emphasis
     padding: int = 0
     bits_per_frame: int = 0
     bits_per_slot: int = 0
@@ -50,11 +50,11 @@ class MPEG:
 
 @dataclass
 class BitstreamStruct:
-    data: []
-    data_size: int = 0
-    data_position: int = 0
-    cache: int = 0
-    cache_bits: int = 0
+    data: []  # Processed data
+    data_size: int = 0  # Total data size
+    data_position: int = 0  # Data position
+    cache: int = 0  # bit stream cache
+    cache_bits: int = 0  # free bits in cache
 
 
 @dataclass
@@ -113,8 +113,8 @@ class SideInfo:
 
 @dataclass
 class ScaleFactor:
-    l: []
-    s: []
+    l: []  # [cb]
+    s: []  # [window][cb]
 
     def __init__(self):
         self.l = [[[0] * 22] * util.MAX_CHANNELS] * util.MAX_CHANNELS
@@ -150,7 +150,7 @@ class L3Loop:
 class MP3Encoder:
     def __init__(self, wav_file: WavReader):
         self.__wav_file = wav_file
-
+        # Compute default encoding values.
         self.__mean_bits = 0
         self.__ratio = [[[0.0] * 21] * util.MAX_CHANNELS] * util.MAX_CHANNELS
         self.__scalefactor = ScaleFactor()
@@ -162,21 +162,22 @@ class MP3Encoder:
         self.__l3loop = L3Loop()
         self.__mdct = MDCT()
         self.__subband = Subband()
+        self.__side_info = SideInfo()
+        self.__mpeg = MPEG()
 
         self.__subband_initialise()
         self.__mdct_initialise()
         self.__loop_initialise()
 
-        self.__mpeg = MPEG()
         self.__mpeg.mode = wav_file.mpeg_mode
         self.__mpeg.bitrate = wav_file.bitrate
         self.__mpeg.emphasis = wav_file.emphasis
         self.__mpeg.copyright = wav_file.copyright
         self.__mpeg.original = wav_file.original
 
+        #  Set default values.
         self.__resv_max = 0
         self.__resv_size = 0
-
         self.__mpeg.layer = 1  # Only Layer III currently implemented.
         self.__mpeg.crc = 0
         self.__mpeg.ext = 0
@@ -202,7 +203,7 @@ class MP3Encoder:
 
         self.__bitstream = BitstreamStruct([b''] * util.BUFFER_SIZE, util.BUFFER_SIZE, 0, 0, 32)
 
-        self.__side_info = SideInfo()
+        # determine the mean bitrate for main data
         if self.__mpeg.granules_per_frame == 2:  # MPEG 1
             self.__side_info_len = 8 * ((4 + 17) if wav_file.num_of_channels == 1 else (4 + 32))
         else:  # MPEG 2
