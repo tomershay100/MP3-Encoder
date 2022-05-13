@@ -1,5 +1,6 @@
 import struct
 import sys
+import numpy as np
 import util
 
 
@@ -90,6 +91,9 @@ class WavReader:
         self.__pad_bit = 0
         self.__rest = 0
 
+        self.__buffer = np.fromfile(self.__file, 'int16', self.__num_of_samples * self.__num_of_ch * 2)
+        self.__buffer_pos = {0: 0, 1: 1}
+
     def check_bitrate_index(self):
         if util.find_bitrate_index(self.__bitrate, self.__mpeg_version) < 0:
             sys.exit("Unsupported bitrate configuration.")  # error - not a valid bitrate for encoder
@@ -133,3 +137,13 @@ class WavReader:
     @property
     def num_of_samples(self):
         return self.__num_of_samples
+
+    @property
+    def buffer(self):
+        return self.__buffer
+
+    def get_buffer_pos(self, ch):
+        return self.__buffer_pos[ch]
+
+    def set_buffer_pos(self, ch, offset):
+        self.__buffer_pos[ch] += offset

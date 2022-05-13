@@ -1,3 +1,5 @@
+import numpy as np
+
 MAX_CHANNELS = 2
 MAX_GRANULES = 2
 GRANULE_SIZE = 576
@@ -85,3 +87,27 @@ def find_mpeg_version(samplerate_index):
     else:
         # Finally, MPEG-2.5
         return MPEG_VERSIONS["MPEG_25"]
+
+
+class CircBuffer:
+    def __init__(self, size, datatype='float32'):
+        self.__size = size
+        self.__pos = 0
+        self.buffer = np.zeros(size, dtype=datatype)
+
+    def insert(self, frame):
+        length = len(frame)
+        if self.__pos + length <= self.__size:
+            self.buffer[self.__pos:self.__pos + length] = frame
+        else:
+            overhead = length - (self.__size - self.__pos)
+            self.buffer[self.__pos:self.__size] = frame[:-overhead]
+            self.buffer[0:overhead] = frame[-overhead:]
+        self.__pos += length
+        self.__pos %= self.__size
+
+    def ordered(self):
+        return np.concatenate((self.buffer[self.__pos:], self.buffer[:self.__pos]))
+
+    def reversed(self):
+        return np.concatenate((self.buffer[self.__pos - 1::-1], self.buffer[:self.__pos - 1:-1]))

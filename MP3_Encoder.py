@@ -155,7 +155,7 @@ class MP3Encoder:
         self.__mean_bits = 0
         self.__ratio = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
         self.__scalefactor = ScaleFactor()
-        self.__buffer = np.zeros(util.MAX_CHANNELS, dtype=np.int16)
+        self.__buffer = np.zeros((util.MAX_CHANNELS, self.__wav_file.num_of_samples), dtype=np.int16)
         self.__pe = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES), dtype=np.double)
         self.__l3_enc = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE), dtype=np.int32)
         self.__l3_sb_sample = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES + 1, 18, util.SBLIMIT),
@@ -275,11 +275,8 @@ class MP3Encoder:
         total_sample_count = self.__wav_file.num_of_samples * self.__wav_file.num_of_channels
         count = total_sample_count // samples_per_pass
 
-        buf = 0
         for i in range(count):
-            self.__buffer[0] = buf
-            if self.__wav_file.num_of_channels == 2:
-                self.__buffer[1] = buf + 1
+
             data = self.__encode_buffer_internal()
 
     def __samples_per_pass(self):
@@ -294,7 +291,7 @@ class MP3Encoder:
         self.__mpeg.mean_bits = (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame
 
         # apply mdct to the polyphase output
-        self.__shine_mdct_sub()
+        self.__mdct_sub()
 
         # bit and noise allocation
 
@@ -302,7 +299,7 @@ class MP3Encoder:
 
         pass
 
-    def __shine_mdct_sub(self):
+    def __mdct_sub(self):
         # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
         # [2][2][32][18]. (32*18=576),
         mdct_enc = np.zeros(18, dtype=np.int32)
@@ -314,18 +311,22 @@ class MP3Encoder:
                 mdct_enc = self.__mdct_freq[ch][gr]
 
                 # polyphase filtering
-                for k in range(18, 2):
-                    self.__window_filter_subband(self.__buffer[ch], self.__l3_sb_sample[ch][gr + 1][k][0], ch)
-                    self.__window_filter_subband(self.__buffer[ch], self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
+                for k in range(0, 2, 18):
+                    self.__window_filter_subband(self.__l3_sb_sample[ch][gr + 1][k][0], ch)
+                    self.__window_filter_subband(self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
                     for band in range(32, 2, 1):
                         self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
 
-    def __window_filter_subband(self, buffer, s, ch):
+    def __window_filter_subband(self, s, ch):
+        buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer) << 16  # TODO check for validity
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
+            self.__wav_file.set_buffer_pos(ch, 2)
+            buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
+
         pass
