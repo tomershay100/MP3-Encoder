@@ -15,6 +15,11 @@ BUFFER_SIZE = 4096
 
 SFB_LMAX = 22
 
+en_tot_krit = 10
+en_dif_krit = 100
+en_scfsi_band_krit = 10
+xm_scfsi_band_krit = 10
+
 BIT_RATES = [
     # MPEG version:
     # 2.5, reserved, II, I

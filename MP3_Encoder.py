@@ -445,6 +445,16 @@ class MP3Encoder:
                 if self.__mpeg.version == util.MPEG_VERSIONS.MPEG_I:
                     self.__calc_scfsi(l3_xmin, ch, gr)
 
+                # calculation of number of available bit( per granule )
+                max_bits = self.__max_reservoir_bits(ch, gr)
+
+                # reset of iteration variables
+                self.__scalefactor.l[gr][ch] = 0
+                self.__scalefactor.s[gr][ch] = 0
+                cod_info = cod_info.tt
+                cod_info.slen[:] = 0
+
+
     # calculation of the scalefactor select information ( scfsi )
     def __calc_scfsi(self, l3_xmin, ch, gr):
         l3_side = self.__side_info
@@ -492,5 +502,63 @@ class MP3Encoder:
                     condition += 1
                 condition += 1
 
-            if (abs(self.__l3loop.en_tot[0] - self.__l3loop.en_tot[1]) < en_tot_krit):
-                condition+=1
+            if abs(self.__l3loop.en_tot[0] - self.__l3loop.en_tot[1]) < util.en_tot_krit:
+                condition += 1
+            tp = 0
+            for sfb in range(21 - 1, -1, -1):
+                tp += abs(self.__l3loop.en[0][sfb] - self.__l3loop.en[1][sfb])
+            if tp < util.en_dif_krit:
+                condition += 1
+
+            if condition == 6:
+                for scfsi_band in range(4):
+                    sum0, sum1 = 0, 0
+                    l3_side.scfsi[ch][scfsi_band] = 0
+                    start = scfsi_band_long[scfsi_band]
+                    end = scfsi_band_long[scfsi_band + 1]
+                    for sfb in range(start, end):
+                        sum0 += abs(self.__l3loop.en[0][sfb] - self.__l3loop.en[1][sfb])
+                        sum1 += abs(self.__l3loop.xm[0][sfb] - self.__l3loop.xm[1][sfb])
+
+                    if sum0 < util.en_scfsi_band_krit and sum1 < util.xm_scfsi_band_krit:
+                        l3_side.scfsi[ch][scfsi_band] = 1
+                        scfsi_set |= (1 << scfsi_band)
+                    else:
+                        l3_side.scfsi[ch][scfsi_band] = 0
+
+            else:
+                l3_side.scfsi[ch, :] = 0
+
+    #  Called at the beginning of each granule to get the max bit
+    #  allowance for the current granule based on reservoir size and perceptual entropy.
+    def __max_reservoir_bits(self, ch, gr):
+        pe = self.__pe[ch][gr]
+
+        mean_bits = self.__mean_bits
+
+        mean_bits //= self.__wav_file.num_of_channels
+        max_bits = mean_bits
+
+        if max_bits > 4095:
+            max_bits = 4095
+        if not self.__resv_max:
+            return max_bits
+
+        more_bits = int(pe[0] * 3.1 - mean_bits)
+        add_bits = 0
+        if more_bits > 100:
+            frac = int((self.__resv_size * 6) / 10)
+            if frac < more_bits:
+                add_bits = frac
+            else:
+                add_bits = more_bits
+
+        over_bits = int(self.__resv_size - ((self.__resv_max << 3) / 10) - add_bits)
+        if over_bits > 0:
+            add_bits += over_bits
+
+        max_bits += add_bits
+        if max_bits > 4095:
+            max_bits = 4095
+
+        return max_bits
