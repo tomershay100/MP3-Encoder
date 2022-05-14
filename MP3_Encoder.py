@@ -162,7 +162,7 @@ class MP3Encoder:
         self.__l3_enc = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE), dtype=np.int32)
         self.__l3_sb_sample = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES + 1, 18, util.SBLIMIT),
                                        dtype=np.int32)
-        self.__mdct_freq = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE, util.GRANULE_SIZE), dtype=np.int32)
+        self.__mdct_freq = np.zeros((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE), dtype=np.int32)
         self.__l3loop = L3Loop()
         self.__mdct = MDCT()
         self.__subband = Subband()
@@ -303,6 +303,7 @@ class MP3Encoder:
     def __mdct_sub(self):
         # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
         # [2][2][32][18]. (32*18=576),
+        self.__mdct_freq = self.__mdct_freq.reshape((2, 2, 32, 18))
         mdct_in = np.zeros(36, dtype=np.int32)
 
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
@@ -372,6 +373,8 @@ class MP3Encoder:
 
             # Save latest granule's subband samples to be used in the next mdct call
             self.__l3_sb_sample[ch][0] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
+
+        self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
     def __window_filter_subband(self, s, ch):  # TODO check for validity
         buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
@@ -469,8 +472,8 @@ class MP3Encoder:
         for ch in range(self.__wav_file.num_of_channels):
             for gr in range(self.__mpeg.granules_per_frame):
                 for i in range(util.GRANULE_SIZE):
-                    if self.__mdct_freq[ch][gr][0][i] < 0 and self.__l3_enc[ch][gr][0][i] > 0:
-                        self.__l3_enc[ch][gr][0][i] *= -1
+                    if self.__mdct_freq[ch][gr][i] < 0 and self.__l3_enc[ch][gr][i] > 0:
+                        self.__l3_enc[ch][gr][i] *= -1
 
         self.__encodeSideInfo()
         self.__encodeMainData()
