@@ -313,15 +313,15 @@ class MP3Encoder:
                 # mdct_enc = self.__mdct_freq[ch][gr]
 
                 # polyphase filtering
-                for k in range(0, 2, 18):
-                    self.__l3_sb_sample[ch][gr + 1][k] = self.__window_filter_subband(
+                for k in range(0, 18, 2):
+                    self.__l3_sb_sample[ch, gr + 1, k, :] = self.__window_filter_subband(
                         self.__l3_sb_sample[ch][gr + 1][k], ch)
-                    self.__l3_sb_sample[ch][gr + 1][k + 1] = self.__window_filter_subband(
+                    self.__l3_sb_sample[ch, gr + 1, k + 1, :] = self.__window_filter_subband(
                         self.__l3_sb_sample[ch][gr + 1][k + 1], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
-                    for band in range(1, 32, 2):
+                    for band in range(1, 2, 32):
                         self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
 
                 # Perform imdct of 18 previous subband samples + 18 current subband samples
@@ -373,7 +373,7 @@ class MP3Encoder:
                             tables.MDCT_CS7, tables.MDCT_CA7)
 
             # Save latest granule's subband samples to be used in the next mdct call
-            self.__l3_sb_sample[ch][0] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
+            self.__l3_sb_sample[ch, 0, :, :] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
 
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
@@ -382,9 +382,9 @@ class MP3Encoder:
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16
+            self.__subband.x[ch][i + self.__subband.off[ch]] = np.int32(
+                self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch)]) << 16
             self.__wav_file.set_buffer_pos(ch, 2)
-            buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
         for i in range(64 - 1, -1, -1):
             s_value = util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (0 << 6)) & (util.HAN_SIZE - 1)],
