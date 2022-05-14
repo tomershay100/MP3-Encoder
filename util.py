@@ -115,10 +115,12 @@ def find_mpeg_version(samplerate_index):
 
 
 def mul(a, b):
-    a_int64 = np.array([a], dtype='int64')
-    b_int64 = np.array([b], dtype='int64')
-    tmp = (a_int64[0] * b_int64[0]) >> 32
-    return np.array([tmp], dtype='int32')[0]
+    a = np.int64(a)
+    b = np.int64(b)
+    tmp = (a * b) >> 32
+    return np.int32(tmp)
+
+
 def mulsr(a, b):
     a = np.int64(a)
     b = np.int64(b)
@@ -126,21 +128,16 @@ def mulsr(a, b):
 
 
 def cmuls(are, aim, bre, bim):
-    are_int64 = np.array([are], dtype='int64')
-    aim_int64 = np.array([aim], dtype='int64')
-    bre_int64 = np.array([bre], dtype='int64')
-    bim_int64 = np.array([bim], dtype='int64')
+    are = np.int64(are)
+    aim = np.int64(aim)
+    bre = np.int64(bre)
+    bim = np.int64(bim)
 
-    tre = np.array([(are_int64[0] * bre_int64[0] - aim_int64[0] * bim_int64[0]) >> 31], dtype='int32')
-    dim = np.array([(are_int64[0] * bim_int64[0] + aim_int64[0] * bre_int64[0]) >> 31], dtype='int32')
+    tre = np.int32((are[0] * bre[0] - aim[0] * bim[0]) >> 31)
+    dim = np.int32((are[0] * bim[0] + aim[0] * bre[0]) >> 31)
     dre = tre
     return dim, dre
+
+
 def labs(a):
     return np.abs(np.long(a))
-
-
-def mul(a, b):
-    a_int64 = np.array([a], dtype='int64')
-    b_int64 = np.array([b], dtype='int64')
-    tmp = (a_int64[0] * b_int64[0]) >> 32
-    return np.array([tmp], dtype='int32')[0]
