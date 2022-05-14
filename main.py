@@ -1,6 +1,7 @@
 import os
 import sys
 
+import util
 from MP3_Encoder import MP3Encoder
 from WAV_Reader import WavReader
 
