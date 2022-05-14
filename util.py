@@ -133,8 +133,8 @@ def cmuls(are, aim, bre, bim):
     bre = np.int64(bre)
     bim = np.int64(bim)
 
-    tre = np.int32((are[0] * bre[0] - aim[0] * bim[0]) >> 31)
-    dim = np.int32((are[0] * bim[0] + aim[0] * bre[0]) >> 31)
+    tre = np.int32((are * bre - aim * bim) >> 31)
+    dim = np.int32((are * bim + aim * bre) >> 31)
     dre = tre
     return dim, dre
 
