@@ -1,3 +1,4 @@
+from copy import copy
 from dataclasses import dataclass
 import math
 
@@ -345,8 +346,33 @@ class MP3Encoder:
 
                     # Perform aliasing reduction butterfly
                     if band != 0:
-                        mdct_enc[band][0], mdct_enc[band - 1][17 - 0] = util.cmuls(mdct_enc[band][0], mdct_enc[band - 1][17 - 0],
+                        mdct_enc[band][0], mdct_enc[band - 1][17 - 0] = util.cmuls(mdct_enc[band][0],
+                                                                                   mdct_enc[band - 1][17 - 0],
                                                                                    tables.MDCT_CS0, tables.MDCT_CA0)
+                        mdct_enc[band][1], mdct_enc[band - 1][17 - 1] = util.cmuls(mdct_enc[band][1],
+                                                                                   mdct_enc[band - 1][17 - 1],
+                                                                                   tables.MDCT_CS1, tables.MDCT_CA1)
+                        mdct_enc[band][2], mdct_enc[band - 1][17 - 2] = util.cmuls(mdct_enc[band][2],
+                                                                                   mdct_enc[band - 1][17 - 2],
+                                                                                   tables.MDCT_CS2, tables.MDCT_CA2)
+                        mdct_enc[band][3], mdct_enc[band - 1][17 - 3] = util.cmuls(mdct_enc[band][3],
+                                                                                   mdct_enc[band - 1][17 - 3],
+                                                                                   tables.MDCT_CS3, tables.MDCT_CA3)
+                        mdct_enc[band][4], mdct_enc[band - 1][17 - 4] = util.cmuls(mdct_enc[band][4],
+                                                                                   mdct_enc[band - 1][17 - 4],
+                                                                                   tables.MDCT_CS4, tables.MDCT_CA4)
+                        mdct_enc[band][5], mdct_enc[band - 1][17 - 5] = util.cmuls(mdct_enc[band][5],
+                                                                                   mdct_enc[band - 1][17 - 5],
+                                                                                   tables.MDCT_CS5, tables.MDCT_CA5)
+                        mdct_enc[band][6], mdct_enc[band - 1][17 - 6] = util.cmuls(mdct_enc[band][6],
+                                                                                   mdct_enc[band - 1][17 - 6],
+                                                                                   tables.MDCT_CS6, tables.MDCT_CA6)
+                        mdct_enc[band][7], mdct_enc[band - 1][17 - 7] = util.cmuls(mdct_enc[band][7],
+                                                                                   mdct_enc[band - 1][17 - 7],
+                                                                                   tables.MDCT_CS7, tables.MDCT_CA7)
+
+            # Save latest granule's subband samples to be used in the next mdct call
+            self.__l3_sb_sample[ch][0] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
 
     def __window_filter_subband(self, s, ch):  # TODO check for validity
         buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
