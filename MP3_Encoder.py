@@ -297,7 +297,7 @@ class MP3Encoder:
         # bit and noise allocation
 
         # write the frame to the bitstream
-
+        self.__format_bitstream()
         pass
 
     def __mdct_sub(self):
@@ -379,7 +379,7 @@ class MP3Encoder:
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
@@ -465,3 +465,19 @@ class MP3Encoder:
 
         if temp:
             self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
+
+    def __format_bitstream(self):
+        for ch in range(self.__wav_file.num_of_channels):
+            for gr in range(self.__mpeg.granules_per_frame):
+                for i in range(util.GRANULE_SIZE):
+                    if self.__mdct_freq[ch][gr][0] < 0 and self.__l3_enc[ch][gr][0][i] > 0:
+                        self.__l3_enc[ch][gr][0][i] *= -1
+
+        self.__encodeSideInfo()
+        self.__encodeMainData()
+
+    def __encodeSideInfo(self):
+        pass
+
+    def __encodeMainData(self):
+        pass
