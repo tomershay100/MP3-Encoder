@@ -295,7 +295,7 @@ class MP3Encoder:
         self.__mdct_sub()
 
         # bit and noise allocation
-
+        self.__iteration_loop()
         # write the frame to the bitstream
         self.__format_bitstream()
         pass
@@ -422,7 +422,7 @@ class MP3Encoder:
         return s
 
     # bit and noise allocation
-    def iteration_loop(self):
+    def __iteration_loop(self):
         l3_xmin = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
 
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
@@ -439,12 +439,12 @@ class MP3Encoder:
                     if self.__l3loop.xrabs[i] > self.__l3loop.xrmax:
                         self.__l3loop.xrmax = self.__l3loop.xrabs[i]
 
-                cod_info = self.__side_info.gr[gr].ch[ch]
+                cod_info = self.__side_info.gr[gr].ch[ch].tt
                 cod_info.sfb_lmax = util.SFB_LMAX - 1  # gr_deco
 
                 l3_xmin[gr, ch, 0:cod_info.sfb_lmax] = 0
 
-                if self.__mpeg.version == util.MPEG_VERSIONS.MPEG_I:
+                if self.__mpeg.version == util.MPEG_VERSIONS["MPEG_I"]:
                     self.__calc_scfsi(l3_xmin, ch, gr)
 
                 # calculation of number of available bit( per granule )
@@ -453,7 +453,6 @@ class MP3Encoder:
                 # reset of iteration variables
                 self.__scalefactor.l[gr][ch] = 0
                 self.__scalefactor.s[gr][ch] = 0
-                cod_info = cod_info.tt
                 cod_info.slen[:] = 0
 
 
@@ -465,7 +464,7 @@ class MP3Encoder:
         scfsi_band_long = [0, 6, 11, 16, 21]
         condition = 0
 
-        scalefac_band_long = util.scale_fact_band_index[self.__mpeg.samplerate_index][0]
+        scalefac_band_long = util.scale_fact_band_index[self.__mpeg.samplerate_index]
 
         self.__l3loop.xrmaxl[gr] = self.__l3loop.xrmax
         scfsi_set = 0
