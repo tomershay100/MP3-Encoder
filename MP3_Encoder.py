@@ -124,7 +124,7 @@ class ScaleFactor:
 
 @dataclass
 class L3Loop:
-    xr: int  # a pointer of the magnitudes of the spectral values
+    xr: np.array  # a pointer of the magnitudes of the spectral values
     xrsq: []  # xr squared
     xrabs: []  # xr absolute
     xrmax: int  # maximum of xrabs array
@@ -276,7 +276,6 @@ class MP3Encoder:
         count = total_sample_count // samples_per_pass
 
         for i in range(count):
-
             data = self.__encode_buffer_internal()
 
     def __samples_per_pass(self):
@@ -325,8 +324,44 @@ class MP3Encoder:
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validityi
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
         pass
+
+    # bit and noise allocation
+    def iteration_loop(self):
+        l3_xmin = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
+
+        for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
+            for gr in range(self.__mpeg.granules_per_frame):
+                # setup pointers
+                ix = self.__l3_enc[ch][gr]
+                self.__l3loop.xr = self.__mdct_freq[ch][gr]
+
+                # Precalculate the square, abs, and maximum, for us later on.
+                self.__l3loop.xrmax = 0
+                for i in range(util.GRANULE_SIZE - 1, -1, -1):
+                    self.__l3loop.xrsq[i] = util.mulsr(self.__l3loop.xr[i], self.__l3loop.xr[i])
+                    self.__l3loop.xrabs[i] = util.labs(self.__l3loop.xr[i])
+                    if self.__l3loop.xrabs[i] > self.__l3loop.xrmax:
+                        self.__l3loop.xrmax = self.__l3loop.xrabs[i]
+
+                cod_info = self.__side_info.gr[gr].ch[ch]
+                cod_info.sfb_lmax = util.SFB_LMAX - 1  # gr_deco
+
+                l3_xmin[gr, ch, 0:cod_info.sfb_lmax] = 0
+
+                if self.__mpeg.version == util.MPEG_VERSIONS.MPEG_I:
+                    self.__calc_scfsi(l3_xmin, ch, gr)
+
+    # calculation of the scalefactor select information ( scfsi )
+    def __calc_scfsi(self, l3_xmin, ch, gr):
+        l3_side = self.__side_info
+
+        # This is the scfsi_band table from 2.4.2.7 of the IS
+        scfsi_band_long = [0, 6, 11, 16, 21]
+        condition = 0
+
+        scalefac_band_long = util.scale_fact_band_index[self.__mpeg.samplerate_index][0]
