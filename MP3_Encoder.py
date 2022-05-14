@@ -329,4 +329,5 @@ class MP3Encoder:
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
-        pass
+        for i in range(64 - 1, -1, -1):
+            pass
