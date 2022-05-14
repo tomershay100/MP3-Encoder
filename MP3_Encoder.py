@@ -373,6 +373,28 @@ class MP3Encoder:
         temp = 0
         for i in range(util.GRANULE_SIZE - 1, -1, -1):
             temp += self.__l3loop.xrsq[i] >> 10  # a bit of scaling to avoid overflow
-
         if temp:
             self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
+        else:
+            self.__l3loop.en_tot[gr] = 0
+
+        # The energy of each scalefactor band, en
+        # The allowed distortion of each scalefactor band, xm
+        for sfb in range(21 - 1, -1, -1):
+            start = scalefac_band_long[sfb]
+            end = scalefac_band_long[sfb + 1]
+
+            temp = 0
+            for i in range(start, end):
+                temp += self.__l3loop.xrsq[i] >> 10
+            if temp:
+                self.__l3loop.en[gr][sfb] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
+            else:
+                self.__l3loop.en[gr][sfb] = 0
+
+            if l3_xmin[gr][ch][sfb]:
+                self.__l3loop.xm[gr][sfb] = np.log(l3_xmin[gr][ch][sfb]) / util.LN2
+            else:
+                self.__l3loop.xm[gr][sfb] = 0
+
+        if gr == 1:
