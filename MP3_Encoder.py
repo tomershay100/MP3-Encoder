@@ -487,3 +487,10 @@ class MP3Encoder:
                 self.__l3loop.xm[gr][sfb] = 0
 
         if gr == 1:
+            for gr2 in range(2 - 1, -1, -1):
+                if self.__l3loop.xrmaxl[gr2]:
+                    condition += 1
+                condition += 1
+
+            if (abs(self.__l3loop.en_tot[0] - self.__l3loop.en_tot[1]) < en_tot_krit):
+                condition+=1
