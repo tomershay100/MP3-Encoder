@@ -114,16 +114,6 @@ def find_mpeg_version(samplerate_index):
         return MPEG_VERSIONS["MPEG_25"]
 
 
-def mulsr(a, b):
-    a = np.int64(a)
-    b = np.int64(b)
-    return np.int32((((a * b) + np.int64(1073741824)) >> 31))
-
-
-def labs(a):
-    return np.abs(np.long(a))
-
-
 def mul(a, b):
     a = np.int64(a)
     b = np.int64(b)
