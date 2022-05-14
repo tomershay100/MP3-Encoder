@@ -454,3 +454,14 @@ class MP3Encoder:
         condition = 0
 
         scalefac_band_long = util.scale_fact_band_index[self.__mpeg.samplerate_index][0]
+
+        self.__l3loop.xrmaxl[gr] = self.__l3loop.xrmax
+        scfsi_set = 0
+
+        # the total energy of the granule
+        temp = 0
+        for i in range(util.GRANULE_SIZE - 1, -1, -1):
+            temp += self.__l3loop.xrsq[i] >> 10  # a bit of scaling to avoid overflow
+
+        if temp:
+            self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
