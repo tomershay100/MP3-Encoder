@@ -42,6 +42,7 @@ class MPEG:
     frac_slots_per_frame: float = 0.0
     slot_lag: float = 0.0
     whole_slots_per_frame: int = 0
+    mean_bits: int = 0
     bitrate_index: int = 0
     samplerate_index: int = 0
     crc: int = 0
@@ -139,6 +140,7 @@ class L3Loop:
     int2idx: []  # x**(3/4)   for x = 0..9999
 
     def __init__(self):
+        self.xr = np.zeros(1)
         self.xrsq = np.zeros(util.GRANULE_SIZE, dtype=np.int32)
         self.xrabs = np.zeros(util.GRANULE_SIZE, dtype=np.int32)
         self.en_tot = np.zeros(util.MAX_GRANULES, dtype=np.int32)
@@ -154,7 +156,6 @@ class MP3Encoder:
     def __init__(self, wav_file: WavReader):
         self.__wav_file = wav_file
         # Compute default encoding values.
-        self.__mean_bits = 0
         self.__ratio = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
         self.__scalefactor = ScaleFactor()
         self.__buffer = np.zeros((util.MAX_CHANNELS, self.__wav_file.num_of_samples), dtype=np.int16)
@@ -194,12 +195,12 @@ class MP3Encoder:
         self.__mpeg.granules_per_frame = util.GRANULES_PER_FRAME[self.__mpeg.version]
 
         # Figure average number of 'slots' per frame.
-        avg_slots_per_frame = (float(self.__mpeg.granules_per_frame) * util.GRANULES_SIZE / float(
-            wav_file.samplerate)) * (1000 * float(self.__mpeg.bitrate) / float(self.__mpeg.bits_per_slot))
+        avg_slots_per_frame = (np.double(self.__mpeg.granules_per_frame) * util.GRANULES_SIZE / (np.double(
+            wav_file.samplerate))) * (1000 * np.double(self.__mpeg.bitrate) / np.double(self.__mpeg.bits_per_slot))
 
         self.__mpeg.whole_slots_per_frame = int(avg_slots_per_frame)
 
-        self.__mpeg.frac_slots_per_frame = avg_slots_per_frame - float(self.__mpeg.whole_slots_per_frame)
+        self.__mpeg.frac_slots_per_frame = avg_slots_per_frame - np.double(self.__mpeg.whole_slots_per_frame)
         self.__mpeg.slot_lag = - self.__mpeg.frac_slots_per_frame
 
         if self.__mpeg.frac_slots_per_frame == 0:
@@ -288,8 +289,9 @@ class MP3Encoder:
             self.__mpeg.padding = (1 if self.__mpeg.slot_lag <= (self.__mpeg.frac_slots_per_frame - 1.0) else 0)
             self.__mpeg.slot_lag += self.__mpeg.padding - self.__mpeg.frac_slots_per_frame
 
-        self.__mpeg.bits_per_frame = 8 * self.__mpeg.whole_slots_per_frame + self.__mpeg.padding
-        self.__mpeg.mean_bits = (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame
+        self.__mpeg.bits_per_frame = 8 * (self.__mpeg.whole_slots_per_frame + self.__mpeg.padding)
+        self.__mpeg.mean_bits = int(
+            (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame)
 
         # apply mdct to the polyphase output
         self.__mdct_sub()
@@ -301,14 +303,14 @@ class MP3Encoder:
         pass
 
     def __mdct_sub(self):
-        # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
+        # note. we wish to access the array 'config.mdct_freq[2][2][576]' as
         # [2][2][32][18]. (32*18=576),
         self.__mdct_freq = self.__mdct_freq.reshape((2, 2, 32, 18))
         mdct_in = np.zeros(36, dtype=np.int32)
 
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
             for gr in range(self.__mpeg.granules_per_frame):
-                # set up pointer to the part of config->mdct_freq we're using
+                # set up pointer to the part of config.mdct_freq we're using
                 # mdct_enc = self.__mdct_freq[ch][gr]
 
                 # polyphase filtering
@@ -454,7 +456,19 @@ class MP3Encoder:
                 self.__scalefactor.l[gr][ch] = 0
                 self.__scalefactor.s[gr][ch] = 0
                 cod_info.slen[:] = 0
-
+                cod_info.part2_3_length = 0
+                cod_info.big_values = 0
+                cod_info.count1 = 0
+                cod_info.scalefac_compress = 0
+                cod_info.table_select[0] = 0
+                cod_info.table_select[1] = 0
+                cod_info.table_select[2] = 0
+                cod_info.region0_count = 0
+                cod_info.region1_count = 0
+                cod_info.part2_length = 0
+                cod_info.preflag = 0
+                cod_info.scalefac_scale = 0
+                cod_info.count1table_select = 0
 
     # calculation of the scalefactor select information ( scfsi )
     def __calc_scfsi(self, l3_xmin, ch, gr):
@@ -536,7 +550,7 @@ class MP3Encoder:
     def __max_reservoir_bits(self, ch, gr):
         pe = self.__pe[ch][gr]
 
-        mean_bits = self.__mean_bits
+        mean_bits = self.__mpeg.mean_bits
 
         mean_bits //= self.__wav_file.num_of_channels
         max_bits = mean_bits

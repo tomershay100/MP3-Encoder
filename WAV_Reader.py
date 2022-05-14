@@ -5,7 +5,8 @@ import util
 
 
 class WavReader:
-    def __init__(self, file_path, bit_rate=64):
+    # The encoder wil get the bitrate from the Decoder
+    def __init__(self, file_path, bit_rate=320):
         self.__file_path = file_path
         self.__bitrate = bit_rate
         self.__file = open(self.__file_path, 'rb')
