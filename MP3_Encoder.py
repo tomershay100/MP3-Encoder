@@ -297,26 +297,26 @@ class MP3Encoder:
         # bit and noise allocation
 
         # write the frame to the bitstream
-
+        self.__format_bitstream()
         pass
 
     def __mdct_sub(self):
         # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
         # [2][2][32][18]. (32*18=576),
-        mdct_enc = np.zeros(18, dtype=np.int32)
+        self.__mdct_freq = self.__mdct_freq.reshape((2, 2, 32, 18))
         mdct_in = np.zeros(36, dtype=np.int32)
 
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
             for gr in range(self.__mpeg.granules_per_frame):
                 # set up pointer to the part of config->mdct_freq we're using
-                mdct_enc = self.__mdct_freq[ch][gr]
+                # mdct_enc = self.__mdct_freq[ch][gr]
 
                 # polyphase filtering
                 for k in range(0, 2, 18):
-                    self.__l3_sb_sample[ch][gr + 1][k][0] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k][0], ch)
-                    self.__l3_sb_sample[ch][gr + 1][k + 1][0] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
+                    self.__l3_sb_sample[ch][gr + 1][k] = self.__window_filter_subband(
+                        self.__l3_sb_sample[ch][gr + 1][k], ch)
+                    self.__l3_sb_sample[ch][gr + 1][k + 1] = self.__window_filter_subband(
+                        self.__l3_sb_sample[ch][gr + 1][k + 1], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
@@ -342,44 +342,46 @@ class MP3Encoder:
                             vm += util.mul(mdct_in[j - 5], self.__mdct.cos_l[k][j - 5])
                             vm += util.mul(mdct_in[j - 6], self.__mdct.cos_l[k][j - 6])
                             vm += util.mul(mdct_in[j - 7], self.__mdct.cos_l[k][j - 7])
-                        mdct_enc[band][k] = vm
+                        self.__mdct_freq[ch][gr][band][k] = vm
 
                     # Perform aliasing reduction butterfly
                     if band != 0:
-                        mdct_enc[band][0], mdct_enc[band - 1][17 - 0] = util.cmuls(mdct_enc[band][0],
-                                                                                   mdct_enc[band - 1][17 - 0],
-                                                                                   tables.MDCT_CS0, tables.MDCT_CA0)
-                        mdct_enc[band][1], mdct_enc[band - 1][17 - 1] = util.cmuls(mdct_enc[band][1],
-                                                                                   mdct_enc[band - 1][17 - 1],
-                                                                                   tables.MDCT_CS1, tables.MDCT_CA1)
-                        mdct_enc[band][2], mdct_enc[band - 1][17 - 2] = util.cmuls(mdct_enc[band][2],
-                                                                                   mdct_enc[band - 1][17 - 2],
-                                                                                   tables.MDCT_CS2, tables.MDCT_CA2)
-                        mdct_enc[band][3], mdct_enc[band - 1][17 - 3] = util.cmuls(mdct_enc[band][3],
-                                                                                   mdct_enc[band - 1][17 - 3],
-                                                                                   tables.MDCT_CS3, tables.MDCT_CA3)
-                        mdct_enc[band][4], mdct_enc[band - 1][17 - 4] = util.cmuls(mdct_enc[band][4],
-                                                                                   mdct_enc[band - 1][17 - 4],
-                                                                                   tables.MDCT_CS4, tables.MDCT_CA4)
-                        mdct_enc[band][5], mdct_enc[band - 1][17 - 5] = util.cmuls(mdct_enc[band][5],
-                                                                                   mdct_enc[band - 1][17 - 5],
-                                                                                   tables.MDCT_CS5, tables.MDCT_CA5)
-                        mdct_enc[band][6], mdct_enc[band - 1][17 - 6] = util.cmuls(mdct_enc[band][6],
-                                                                                   mdct_enc[band - 1][17 - 6],
-                                                                                   tables.MDCT_CS6, tables.MDCT_CA6)
-                        mdct_enc[band][7], mdct_enc[band - 1][17 - 7] = util.cmuls(mdct_enc[band][7],
-                                                                                   mdct_enc[band - 1][17 - 7],
-                                                                                   tables.MDCT_CS7, tables.MDCT_CA7)
+                        self.__mdct_freq[ch][gr][band][0], self.__mdct_freq[ch][gr][band - 1][17 - 0] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][0], self.__mdct_freq[ch][gr][band - 1][17 - 0],
+                            tables.MDCT_CS0, tables.MDCT_CA0)
+                        self.__mdct_freq[ch][gr][band][1], self.__mdct_freq[ch][gr][band - 1][17 - 1] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][1], self.__mdct_freq[ch][gr][band - 1][17 - 1],
+                            tables.MDCT_CS1, tables.MDCT_CA1)
+                        self.__mdct_freq[ch][gr][band][2], self.__mdct_freq[ch][gr][band - 1][17 - 2] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][2], self.__mdct_freq[ch][gr][band - 1][17 - 2],
+                            tables.MDCT_CS2, tables.MDCT_CA2)
+                        self.__mdct_freq[ch][gr][band][3], self.__mdct_freq[ch][gr][band - 1][17 - 3] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][3], self.__mdct_freq[ch][gr][band - 1][17 - 3],
+                            tables.MDCT_CS3, tables.MDCT_CA3)
+                        self.__mdct_freq[ch][gr][band][4], self.__mdct_freq[ch][gr][band - 1][17 - 4] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][4], self.__mdct_freq[ch][gr][band - 1][17 - 4],
+                            tables.MDCT_CS4, tables.MDCT_CA4)
+                        self.__mdct_freq[ch][gr][band][5], self.__mdct_freq[ch][gr][band - 1][17 - 5] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][5], self.__mdct_freq[ch][gr][band - 1][17 - 5],
+                            tables.MDCT_CS5, tables.MDCT_CA5)
+                        self.__mdct_freq[ch][gr][band][6], self.__mdct_freq[ch][gr][band - 1][17 - 6] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][6], self.__mdct_freq[ch][gr][band - 1][17 - 6],
+                            tables.MDCT_CS6, tables.MDCT_CA6)
+                        self.__mdct_freq[ch][gr][band][7], self.__mdct_freq[ch][gr][band - 1][17 - 7] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][7], self.__mdct_freq[ch][gr][band - 1][17 - 7],
+                            tables.MDCT_CS7, tables.MDCT_CA7)
 
             # Save latest granule's subband samples to be used in the next mdct call
             self.__l3_sb_sample[ch][0] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
+
+        self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
     def __window_filter_subband(self, s, ch):  # TODO check for validity
         buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
@@ -472,6 +474,7 @@ class MP3Encoder:
         temp = 0
         for i in range(util.GRANULE_SIZE - 1, -1, -1):
             temp += self.__l3loop.xrsq[i] >> 10  # a bit of scaling to avoid overflow
+
         if temp:
             self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
         else:
@@ -562,3 +565,19 @@ class MP3Encoder:
             max_bits = 4095
 
         return max_bits
+
+    def __format_bitstream(self):
+        for ch in range(self.__wav_file.num_of_channels):
+            for gr in range(self.__mpeg.granules_per_frame):
+                for i in range(util.GRANULE_SIZE):
+                    if self.__mdct_freq[ch][gr][i] < 0 and self.__l3_enc[ch][gr][i] > 0:
+                        self.__l3_enc[ch][gr][i] *= -1
+
+        self.__encodeSideInfo()
+        self.__encodeMainData()
+
+    def __encodeSideInfo(self):
+        pass
+
+    def __encodeMainData(self):
+        pass
