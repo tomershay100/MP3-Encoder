@@ -87,3 +87,10 @@ def find_mpeg_version(samplerate_index):
     else:
         # Finally, MPEG-2.5
         return MPEG_VERSIONS["MPEG_25"]
+
+
+def mul(a, b):
+    a_int64 = np.array([a], dtype='int64')
+    b_int64 = np.array([b], dtype='int64')
+    tmp = (a_int64[0] * b_int64[0]) >> 32
+    return np.array([tmp], dtype='int32')[0]

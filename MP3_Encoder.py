@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import math
 
+import tables
 from WAV_Reader import WavReader
 import util
 import numpy as np
@@ -276,7 +277,6 @@ class MP3Encoder:
         count = total_sample_count // samples_per_pass
 
         for i in range(count):
-
             data = self.__encode_buffer_internal()
 
     def __samples_per_pass(self):
@@ -330,4 +330,37 @@ class MP3Encoder:
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
         for i in range(64 - 1, -1, -1):
-            pass
+            s_value = util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (0 << 6)) & (util.HAN_SIZE - 1)],
+                               tables.enwindow[i + (0 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (1 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (1 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (2 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (2 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (3 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (3 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (4 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (4 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (5 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (5 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (6 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (6 << 6)])
+            s_value += util.mul(self.__subband.x[ch][(self.__subband.off[ch] + i + (7 << 6)) & (util.HAN_SIZE - 1)],
+                                tables.enwindow[i + (7 << 6)])
+
+            y[i] = s_value
+
+        self.__subband.off[ch] = (self.__subband.off[ch] + 480) & (util.HAN_SIZE - 1)  # offset is modulo (HAN_SIZE)
+
+        for i in range(util.SBLIMIT - 1, -1, -1):
+            s_value = util.mul(self.__subband.fl[i][63], y[63])
+            for j in range(63, 0, -7):
+                s_value += util.mul(self.__subband.fl[i][j - 1], y[j - 1])
+                s_value += util.mul(self.__subband.fl[i][j - 2], y[j - 2])
+                s_value += util.mul(self.__subband.fl[i][j - 3], y[j - 3])
+                s_value += util.mul(self.__subband.fl[i][j - 4], y[j - 4])
+                s_value += util.mul(self.__subband.fl[i][j - 5], y[j - 5])
+                s_value += util.mul(self.__subband.fl[i][j - 6], y[j - 6])
+                s_value += util.mul(self.__subband.fl[i][j - 7], y[j - 7])
+            s[i] = s_value
+
+        return s
