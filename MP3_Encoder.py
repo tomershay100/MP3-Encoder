@@ -379,7 +379,7 @@ class MP3Encoder:
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
