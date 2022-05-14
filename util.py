@@ -147,3 +147,10 @@ def cmuls(are, aim, bre, bim):
     return dim, dre
 def labs(a):
     return np.abs(np.long(a))
+
+
+def mul(a, b):
+    a_int64 = np.array([a], dtype='int64')
+    b_int64 = np.array([b], dtype='int64')
+    tmp = (a_int64[0] * b_int64[0]) >> 32
+    return np.array([tmp], dtype='int32')[0]
