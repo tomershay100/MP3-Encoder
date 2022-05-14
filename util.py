@@ -129,3 +129,15 @@ def mul(a, b):
     b_int64 = np.array([b], dtype='int64')
     tmp = (a_int64[0] * b_int64[0]) >> 32
     return np.array([tmp], dtype='int32')[0]
+
+
+def cmuls(are, aim, bre, bim):
+    are_int64 = np.array([are], dtype='int64')
+    aim_int64 = np.array([aim], dtype='int64')
+    bre_int64 = np.array([bre], dtype='int64')
+    bim_int64 = np.array([bim], dtype='int64')
+
+    tre = np.array([(are_int64[0] * bre_int64[0] - aim_int64[0] * bim_int64[0]) >> 31], dtype='int32')
+    dim = np.array([(are_int64[0] * bim_int64[0] + aim_int64[0] * bre_int64[0]) >> 31], dtype='int32')
+    dre = tre
+    return dim, dre

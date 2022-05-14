@@ -312,20 +312,48 @@ class MP3Encoder:
 
                 # polyphase filtering
                 for k in range(0, 2, 18):
-                    self.__window_filter_subband(self.__l3_sb_sample[ch][gr + 1][k][0], ch)
-                    self.__window_filter_subband(self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
+                    self.__l3_sb_sample[ch][gr + 1][k][0] = self.__window_filter_subband(
+                        self.__l3_sb_sample[ch][gr + 1][k][0], ch)
+                    self.__l3_sb_sample[ch][gr + 1][k + 1][0] = self.__window_filter_subband(
+                        self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
-                    for band in range(32, 2, 1):
+                    for band in range(1, 32, 2):
                         self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
 
-    def __window_filter_subband(self, s, ch):
+                # Perform imdct of 18 previous subband samples + 18 current subband samples
+                for band in range(0, 32, 1):
+                    for k in range(18 - 1, -1, -1):
+                        mdct_in[k] = self.__l3_sb_sample[ch][gr][k][band]
+                        mdct_in[k + 18] = self.__l3_sb_sample[ch][gr + 1][k][band]
+
+                    # Calculation of the MDCT
+                    # In the case of long blocks ( block_type 0,1,3 ) there are
+                    # 36 coefficients in the time domain and 18 in the frequency domain.
+                    for k in range(18 - 1, -1, -1):
+                        vm = util.mul(mdct_in[35], self.__mdct.cos_l[k][35])
+                        for j in range(35, 0, -7):
+                            vm += util.mul(mdct_in[j - 1], self.__mdct.cos_l[k][j - 1])
+                            vm += util.mul(mdct_in[j - 2], self.__mdct.cos_l[k][j - 2])
+                            vm += util.mul(mdct_in[j - 3], self.__mdct.cos_l[k][j - 3])
+                            vm += util.mul(mdct_in[j - 4], self.__mdct.cos_l[k][j - 4])
+                            vm += util.mul(mdct_in[j - 5], self.__mdct.cos_l[k][j - 5])
+                            vm += util.mul(mdct_in[j - 6], self.__mdct.cos_l[k][j - 6])
+                            vm += util.mul(mdct_in[j - 7], self.__mdct.cos_l[k][j - 7])
+                        mdct_enc[band][k] = vm
+
+                    # Perform aliasing reduction butterfly
+                    if band != 0:
+                        mdct_enc[band][0], mdct_enc[band - 1][17 - 0] = util.cmuls(mdct_enc[band][0], mdct_enc[band - 1][17 - 0],
+                                                                                   tables.MDCT_CS0, tables.MDCT_CA0)
+
+    def __window_filter_subband(self, s, ch):  # TODO check for validity
         buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 

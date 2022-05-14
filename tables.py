@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 slen1_tab = [0, 0, 0, 0, 3, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4]
@@ -297,3 +299,31 @@ huffman_table = [HuffCodeTab(0, 0, 0, 0, None, None),
                  HuffCodeTab(16, 16, 13, 8191, t24HB, t24l),
                  HuffCodeTab(1, 16, 0, 0, t32HB, t32l),
                  HuffCodeTab(1, 16, 0, 0, t33HB, t33l)]
+
+
+# This is table B.9: coefficients for aliasing reduction
+def MDCT_CA(coef):
+    return np.array([(coef / math.sqrt(1.0 + (coef * coef)) * 0x7fffffff)], dtype='int32')[0]
+
+
+def MDCT_CS(coef):
+    return np.array([(1.0 / math.sqrt(1.0 + (coef * coef)) * 0x7fffffff)], dtype='int32')[0]
+
+
+MDCT_CA0 = MDCT_CA(-0.6)
+MDCT_CA1 = MDCT_CA(-0.535)
+MDCT_CA2 = MDCT_CA(-0.33)
+MDCT_CA3 = MDCT_CA(-0.185)
+MDCT_CA4 = MDCT_CA(-0.095)
+MDCT_CA5 = MDCT_CA(-0.041)
+MDCT_CA6 = MDCT_CA(-0.0142)
+MDCT_CA7 = MDCT_CA(-0.0037)
+
+MDCT_CS0 = MDCT_CS(-0.6)
+MDCT_CS1 = MDCT_CS(-0.535)
+MDCT_CS2 = MDCT_CS(-0.33)
+MDCT_CS3 = MDCT_CS(-0.185)
+MDCT_CS4 = MDCT_CS(-0.095)
+MDCT_CS5 = MDCT_CS(-0.041)
+MDCT_CS6 = MDCT_CS(-0.0142)
+MDCT_CS7 = MDCT_CS(-0.0037)
