@@ -327,3 +327,30 @@ MDCT_CS4 = MDCT_CS(-0.095)
 MDCT_CS5 = MDCT_CS(-0.041)
 MDCT_CS6 = MDCT_CS(-0.0142)
 MDCT_CS7 = MDCT_CS(-0.0037)
+
+# 1st element = region0_count, 2nd element = region1_count
+subdv_table = [
+    (0, 0),  # 0 bands
+    (0, 0),  # 1 bands
+    (0, 0),  # 2 bands
+    (0, 0),  # 3 bands
+    (0, 0),  # 4 bands
+    (0, 1),  # 5 bands
+    (1, 1),  # 6 bands
+    (1, 1),  # 7 bands
+    (1, 2),  # 8 bands
+    (2, 2),  # 9 bands
+    (2, 3),  # 10 bands
+    (2, 3),  # 11 bands
+    (3, 4),  # 12 bands
+    (3, 4),  # 13 bands
+    (3, 4),  # 14 bands
+    (4, 5),  # 15 bands
+    (4, 5),  # 16 bands
+    (4, 6),  # 17 bands
+    (5, 6),  # 18 bands
+    (5, 6),  # 19 bands
+    (5, 7),  # 20 bands
+    (6, 7),  # 21 bands
+    (6, 7),  # 22 bands
+]

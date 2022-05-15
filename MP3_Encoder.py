@@ -640,6 +640,112 @@ class MP3Encoder:
 
         return 0  # TODO delete this line
 
+    # Calculation of rzero, count1, big_values (partitions ix into big values, quadruples and zeros).
+    def __calc_runlen(self, ix, cod_info):
+        rzero = 0
+        r_idx = 0
+        for i in range(util.GRANULE_SIZE, 1, 2):
+            if ix[i - 1] == 0 and ix[i - 2] == 0:
+                rzero += 1
+            else:
+                break
+        r_idx += 2 * rzero
+
+        cod_info.count1 = 0
+        for i in range(util.GRANULE_SIZE - r_idx, 3, 4):
+            if ix[i - 1] <= 1 and ix[i - 2] <= 1 and ix[i - 3] <= 1 and ix[i - 4] <= 1:
+                cod_info.count1 += 1
+            else:
+                break
+        r_idx += 4 * cod_info.count1
+
+        cod_info.big_values = r_idx >> 1
+
+    # Determines the number of bits to encode the quadruples.
+    def __count1_bitcount(self, ix, cod_info):
+        i = cod_info.big_values << 1
+        sum0 = 0
+        sum1 = 0
+
+        for k in range(cod_info.count1):
+            v = ix[i]
+            w = ix[i + 1]
+            x = ix[i + 2]
+            y = ix[i + 3]
+
+            p = v + (w << 1) + (x << 2) + (y << 3)
+
+            signbits = 0
+            signbits += (v != 0)
+            signbits += (w != 0)
+            signbits += (x != 0)
+            signbits += (y != 0)
+
+            sum0 += signbits
+            sum1 += signbits
+
+            sum0 += tables.huffman_table[32].hlen[p]
+            sum1 += tables.huffman_table[32].hlen[p]
+
+            i += 4
+
+        if sum0 < sum1:
+            cod_info.count1table_select = 0
+            return sum0
+        else:
+            cod_info.count1table_select = 1
+            return sum1
+
+    # Presumable subdivides the bigvalue region which will use separate Huffman tables.
+    def __subdivide(self, cod_info):
+        if cod_info.big_values == 0:  # No big_values region
+            cod_info.region0_count = 0
+            cod_info.region1_count = 0
+        else:
+            temp_scale_fact_band_index = np.array(util.scale_fact_band_index).flatten()
+            scalefac_band_long = self.__mpeg.samplerate_index
+            temp_scale_fact_band_index = temp_scale_fact_band_index[scalefac_band_long:]
+            bigvalues_region = 2 * cod_info.big_values
+
+            # Calculate scfb_anz
+            scfb_anz = 0
+            while temp_scale_fact_band_index[scfb_anz] < bigvalues_region:
+                scfb_anz += 1
+
+            thiscount = tables.subdv_table[scfb_anz][0]
+            while thiscount > 0:
+                if temp_scale_fact_band_index[thiscount + 1] <= bigvalues_region:
+                    break
+                thiscount -= 1
+            cod_info.region0_count = thiscount
+            cod_info.address1 = temp_scale_fact_band_index[thiscount + 1]
+
+            temp_scale_fact_band_index = temp_scale_fact_band_index[thiscount + 1:]
+
+            thiscount = tables.subdv_table[scfb_anz][1]
+            while thiscount > 0:
+                if temp_scale_fact_band_index[thiscount + 1] <= bigvalues_region:
+                    break
+                thiscount -= 1
+            cod_info.region1_count = thiscount
+            cod_info.address2 = temp_scale_fact_band_index[thiscount + 1]
+
+            cod_info.address3 = bigvalues_region
+
+    # Select huffman code tables for bigvalues regions
+    def __bigv_tab_select(self, ix, cod_info):
+        cod_info.table_select[0] = 0 if cod_info.address1 <= 0 else self.__new_choose_table(ix, 0, cod_info.address1)
+        cod_info.table_select[1] = 0 if cod_info.address2 <= 0 else self.__new_choose_table(ix, cod_info.address1,
+                                                                                            cod_info.address2)
+        cod_info.table_select[2] = 0 if cod_info.address3 <= 0 else self.__new_choose_table(ix, cod_info.address2,
+                                                                                            cod_info.big_values << 1)
+
+    # Choose the Huffman table that will encode ix[begin..end] with the fewest bits.
+    # Note: This code contains knowledge about the sizes and characteristics of the Huffman tables as defined in the
+    # specifications, and will not work with any arbitrary tables.
+    def __new_choose_table(self, ix, begin, end):
+        return 0
+
     # calculates the number of bits needed to encode the scalefacs in the
     #  main data block.
     def __part2_length(self, gr, ch):
