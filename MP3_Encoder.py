@@ -315,17 +315,17 @@ class MP3Encoder:
                 # polyphase filtering
                 for k in range(0, 18, 2):
                     self.__l3_sb_sample[ch, gr + 1, k, :] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k], ch)
+                        self.__l3_sb_sample[ch, gr + 1, k, :], ch)
                     self.__l3_sb_sample[ch, gr + 1, k + 1, :] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k + 1], ch)
+                        self.__l3_sb_sample[ch, gr + 1, k + 1, :], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
-                    for band in range(1, 2, 32):
+                    for band in range(1, 32, 2):
                         self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
 
                 # Perform imdct of 18 previous subband samples + 18 current subband samples
-                for band in range(0, 32, 1):
+                for band in range(32):
                     for k in range(18 - 1, -1, -1):
                         mdct_in[k] = self.__l3_sb_sample[ch][gr][k][band]
                         mdct_in[k + 18] = self.__l3_sb_sample[ch][gr + 1][k][band]
@@ -373,12 +373,11 @@ class MP3Encoder:
                             tables.MDCT_CS7, tables.MDCT_CA7)
 
             # Save latest granule's subband samples to be used in the next mdct call
-            self.__l3_sb_sample[ch, 0, :, :] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
+            self.__l3_sb_sample[ch, 0, :, :] = self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame]
 
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
     def __window_filter_subband(self, s, ch):  # TODO check for validity
-        buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
@@ -425,7 +424,6 @@ class MP3Encoder:
     # bit and noise allocation
     def __iteration_loop(self):
         l3_xmin = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
-
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
             for gr in range(self.__mpeg.granules_per_frame):
                 # setup pointers
@@ -735,9 +733,9 @@ class MP3Encoder:
     # Select huffman code tables for bigvalues regions
     def __bigv_tab_select(self, ix, cod_info):
         cod_info.table_select[0] = 0 if cod_info.address1 <= 0 else self.__new_choose_table(ix, 0, cod_info.address1)
-        cod_info.table_select[1] = 0 if cod_info.address2 <= cod_info.address1\
+        cod_info.table_select[1] = 0 if cod_info.address2 <= cod_info.address1 \
             else self.__new_choose_table(ix, cod_info.address1, cod_info.address2)
-        cod_info.table_select[2] = 0 if (cod_info.big_values << 1) <= cod_info.address2\
+        cod_info.table_select[2] = 0 if (cod_info.big_values << 1) <= cod_info.address2 \
             else self.__new_choose_table(ix, cod_info.address2, cod_info.big_values << 1)
 
     # Choose the Huffman table that will encode ix[begin..end] with the fewest bits.
@@ -874,6 +872,8 @@ class MP3Encoder:
             ix_max = 16384  # No point in continuing, step size not big enough
         else:
             for i in range(util.GRANULE_SIZE):
+                if i == 569:
+                    print('')
                 # This calculation is very sensitive. The multiply must round
                 # it's result or bad things happen to the quality.
 
@@ -884,7 +884,7 @@ class MP3Encoder:
                 else:
                     # Outside table range so have to do it using floats
                     scale = self.__l3loop.steptab[stepsize + 127]  # 2**(-stepsize/4)
-                    dbl = float(self.__l3loop.xrabs[i]) * scale * 4.656612875e-10  # 0x7fffffff
+                    dbl = np.double(self.__l3loop.xrabs[i]) * scale * 4.656612875e-10  # 0x7fffffff
                     ix[i] = int(np.sqrt(np.sqrt(dbl) * dbl))  # dbl**(3/4)
 
                 # calculate ixmax while we're here. note: ix cannot be negative
@@ -963,4 +963,3 @@ class MP3Encoder:
 
     def __encodeMainData(self):
         pass
-
