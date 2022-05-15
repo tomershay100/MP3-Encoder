@@ -654,7 +654,6 @@ class MP3Encoder:
                 cod_info.count1 += 1
                 i -= 4
             else:
-                i -= 4
                 break
 
         cod_info.big_values = i >> 1
