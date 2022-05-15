@@ -872,8 +872,6 @@ class MP3Encoder:
             ix_max = 16384  # No point in continuing, step size not big enough
         else:
             for i in range(util.GRANULE_SIZE):
-                if i == 569:
-                    print('')
                 # This calculation is very sensitive. The multiply must round
                 # it's result or bad things happen to the quality.
 
