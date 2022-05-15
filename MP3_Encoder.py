@@ -613,12 +613,27 @@ class MP3Encoder:
         next = -120
         count = 120
 
-        # TODO get do while out of comment
-
+        # # TODO get do while out of comment
+        #
         # condition = True
         # while condition:
         #     half = count // 2
-        #     # Todo continue loop body here
+        #
+        #     if self.__quantize(ix, next + half) > 8192:
+        #         bit = 100000
+        #     else:
+        #         # TODO write these functions
+        #         self.__calc_runlen(ix, cod_info)  # rzero, count1, big_values
+        #         self.__bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
+        #         self.__subdivide(cod_info)  # bigvalues sfb division
+        #         self.__bigv_tab_select(ix, cod_info)  # codebook selection
+        #         bit += self.__bigv_bitcount(ix, cod_info)  # bitcount
+        #
+        #     if bit < desired_rate:
+        #         count = half
+        #     else:
+        #         next += half
+        #         count -= half
         #
         #     # End of loop body
         #     condition = count > 1
