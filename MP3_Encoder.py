@@ -596,7 +596,7 @@ class MP3Encoder:
         side_info = self.__side_info
         cod_info = side_info.gr[gr].ch[ch].tt
 
-        cod_info.quantizerStepSize = self.__bin_search_StepSize(max_bits, ix, cod_info)
+        cod_info.quantizerStepSize = self.__bin_search_step_size(max_bits, ix, cod_info)
 
         cod_info.part2_length = self.__part2_length(gr, ch)
         huff_bits = max_bits - cod_info.part2_length
@@ -609,7 +609,7 @@ class MP3Encoder:
     # Successive approximation approach to obtaining a initial quantizer step size.
     #  When BIN_SEARCH is defined, the shine_outer_loop function precedes the call to the function shine_inner_loop
     #  with a call to bin_search gain defined below, which returns a good starting quantizerStepSize.
-    def __bin_search_StepSize(self, max_bits, ix, cod_info):
+    def __bin_search_step_size(self, desired_rate, ix, cod_info):
         next = -120
         count = 120
 
@@ -625,10 +625,14 @@ class MP3Encoder:
 
         return 0  # TODO delete this line
 
+    # calculates the number of bits needed to encode the scalefacs in the
+    #  main data block.
     def __part2_length(self, gr, ch):
         return 0  # TODO delete this line
 
-    def __inner_loop(self, ix, huff_bits, cod_info, gr, ch):
+    # The code selects the best quantizer_step_size for a particular set
+    #  of scalefacs.
+    def __inner_loop(self, ix, max_bits, cod_info, gr, ch):
         return 0  # TODO delete this line
 
     def __resv_frame_end(self):
@@ -645,36 +649,36 @@ class MP3Encoder:
             over_bits = 0
 
         self.__resv_size -= over_bits
-        stuffingBits = over_bits + ancillary_pad
+        stuffing_bits = over_bits + ancillary_pad
 
         # we must be byte aligned
         over_bits = self.__resv_size % 8
         if over_bits:
-            stuffingBits += over_bits
+            stuffing_bits += over_bits
             self.__resv_size -= over_bits
 
-        if stuffingBits:
+        if stuffing_bits:
 
             gi = l3_side.gr[0].ch[0].tt
 
-            if gi.part2_3_length + stuffingBits < 4095:
+            if gi.part2_3_length + stuffing_bits < 4095:
                 # plan a: put all into the first granule
-                gi.part2_3_length += stuffingBits
+                gi.part2_3_length += stuffing_bits
             else:
                 # plan b: distribute throughout the granules
                 for gr in range(self.__mpeg.granules_per_frame):
                     for ch in range(self.__wav_file.num_of_channels):
                         gi = l3_side.gr[gr].ch[ch].tt
-                        if not stuffingBits:
+                        if not stuffing_bits:
                             break
                         extra_bits = 4095 - gi.part2_3_length
-                        bits_this_gr = extra_bits if extra_bits < stuffingBits else stuffingBits
+                        bits_this_gr = extra_bits if extra_bits < stuffing_bits else stuffing_bits
                         gi.part2_3_length += bits_this_gr
-                        stuffingBits -= bits_this_gr
+                        stuffing_bits -= bits_this_gr
 
                 # If any stuffing bits remain, we elect to spill them into ancillary data.
                 # The bitstream formatter will do this if l3side.resv_drain is set
-                l3_side.resv_drain = stuffingBits
+                l3_side.resv_drain = stuffing_bits
 
     def __format_bitstream(self):
         for ch in range(self.__wav_file.num_of_channels):
