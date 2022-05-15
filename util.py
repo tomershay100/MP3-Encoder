@@ -124,6 +124,10 @@ def mulsr(a, b):
     b = np.int64(b)
     return np.int32((((a * b) + np.int64(1073741824)) >> 31))
 
+def mulr(a, b):
+    a = np.int64(a)
+    b = np.int64(b)
+    return np.int32((((a * b) + np.int64(2147483648)) >> 32))
 
 def mul(a, b):
     a = np.int64(a)
