@@ -911,12 +911,46 @@ class MP3Encoder:
     # calculates the number of bits needed to encode the scalefacs in the
     #  main data block.
     def __part2_length(self, gr, ch):
-        return 0  # TODO delete this line
+        gi = self.__side_info.gr[gr].ch[ch].tt
+        bits = 0
+
+        slen1 = tables.slen1_tab[gi.scalefac_compress]
+        slen2 = tables.slen2_tab[gi.scalefac_compress]
+
+        if gr == 0 or self.__side_info.scfsi[ch][0] == 0:
+            bits += 6 * slen1
+        if gr == 0 or self.__side_info.scfsi[ch][1] == 0:
+            bits += 5 * slen1
+        if gr == 0 or self.__side_info.scfsi[ch][2] == 0:
+            bits += 5 * slen2
+        if gr == 0 or self.__side_info.scfsi[ch][3] == 0:
+            bits += 5 * slen2
+
+        return bits
 
     # The code selects the best quantizer_step_size for a particular set
     #  of scalefacs.
     def __inner_loop(self, ix, max_bits, cod_info, gr, ch):
-        return 0  # TODO delete this line
+        bits = 0
+
+        if max_bits < 0:
+            cod_info.quantizerStepSize -= 1
+
+        condition = True
+        while condition:
+            while self.__quantize(ix, cod_info.quantizerStepSize + 1) > 8192:  # within table range?
+                cod_info.quantizerStepSize += 1
+            cod_info.quantizerStepSize += 1
+
+            self.__calc_runlen(ix, cod_info)  # rzero,count1,big_values
+            bits = self.__count1_bitcount(ix, cod_info)  # count1_table selection
+            self.__subdivide(cod_info)  # bigvalues sfb division
+            self.__bigv_tab_select(ix, cod_info)  # codebook selection
+            bits += self.__bigv_bitcount(ix, cod_info)  # bit count
+
+            condition = (bits > max_bits)
+
+        return bits
 
     def __resv_frame_end(self):
         l3_side = self.__side_info
