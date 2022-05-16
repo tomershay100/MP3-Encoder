@@ -292,12 +292,12 @@ class MP3Encoder:
         self.__mpeg.mean_bits = (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame
 
         # apply mdct to the polyphase output
-        self.__mdct_sub()
+        self.__mdct_sub()   # TODO check for validity
 
         # bit and noise allocation
 
         # write the frame to the bitstream
-        self.__format_bitstream()
+        self.__format_bitstream()   # TODO check for validity
         pass
 
     def __mdct_sub(self):
@@ -376,7 +376,7 @@ class MP3Encoder:
 
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
-    def __window_filter_subband(self, s, ch):  # TODO check for validity
+    def __window_filter_subband(self, s, ch):
         buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
@@ -627,67 +627,65 @@ class MP3Encoder:
                 stuffing_words -= 1
 
     def __huffman_code(self, table_select, x, y):
-        code = 0
         ext = 0
-        cbits = 0
-        xbits = 0
+        x_bits = 0
 
-        x, signx = util.abs_and_sign(x)
-        y, signy = util.abs_and_sign(y)
+        x, sign_x = util.abs_and_sign(x)
+        y, sign_y = util.abs_and_sign(y)
 
         h = tables.huffman_table[table_select]
-        ylen = h.ylen
+        y_len = h.ylen
         if table_select > 15:  # ESC-table is used
-            linbitsx = 0
-            linbitsy = 0
-            linbits = h.linbits
+            lin_bits_x = 0
+            lin_bits_y = 0
+            lin_bits = h.linbits
             if x > 14:
-                linbitsx = x - 15
+                lin_bits_x = x - 15
                 x = 15
 
             if y > 14:
-                linbitsy = y - 15
+                lin_bits_y = y - 15
                 y = 15
 
-            idx = (x * ylen) + y
+            idx = (x * y_len) + y
             code = h.table[idx]
-            cbits = h.hlen[idx]
+            c_bits = h.hlen[idx]
 
             if x > 14:
-                ext |= linbitsx
-                xbits += linbits
+                ext |= lin_bits_x
+                x_bits += lin_bits
 
             if x != 0:
                 ext <<= 1
-                ext |= signx
-                xbits += 1
+                ext |= sign_x
+                x_bits += 1
 
             if y > 14:
-                ext <<= linbits
-                ext |= linbitsy
-                xbits += linbits
+                ext <<= lin_bits
+                ext |= lin_bits_y
+                x_bits += lin_bits
             if y != 0:
                 ext <<= 1
-                ext |= signy
-                xbits += 1
+                ext |= sign_y
+                x_bits += 1
 
-            self.__putbits(code, cbits)
-            self.__putbits(ext, xbits)
+            self.__putbits(code, c_bits)
+            self.__putbits(ext, x_bits)
         else:  # No ESC-words
-            idx = (x * ylen) + y
+            idx = (x * y_len) + y
             code = h.table[idx]
-            cbits = h.hlen[idx]
+            c_bits = h.hlen[idx]
             if x != 0:
                 code <<= 1
-                code |= signx
-                cbits += 1
+                code |= sign_x
+                c_bits += 1
 
             if y != 0:
                 code <<= 1
-                code |= signy
-                cbits += 1
+                code |= sign_y
+                c_bits += 1
 
-            self.__putbits(code, cbits)
+            self.__putbits(code, c_bits)
 
     def __huffman_coder_count1(self, h, v, w, x, y):
         code = 0
