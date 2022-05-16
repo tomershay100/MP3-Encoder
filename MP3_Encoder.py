@@ -532,17 +532,16 @@ class MP3Encoder:
         bits = util.get_bits_count(self.__bitstream)
 
         # 1: Write the bigvalues
-        # gi = self.__side_info.gr[gr].ch[ch].tt
         big_values = self.__side_info.gr[gr].ch[ch].tt.big_values << 1
 
         scalefac_index = self.__side_info.gr[gr].ch[ch].tt.region0_count + 1
-        region1Start = scale_fac[scalefac_index]
+        region1_start = scale_fac[scalefac_index]
         scalefac_index += self.__side_info.gr[gr].ch[ch].tt.region1_count + 1
-        region2Start = scale_fac[scalefac_index]
+        region2_start = scale_fac[scalefac_index]
 
         for i in range(0, big_values, 2):
             # get table pointer
-            idx = (i >= region1Start) + (i >= region2Start)
+            idx = (i >= region1_start) + (i >= region2_start)
             table_index = self.__side_info.gr[gr].ch[ch].tt.table_select[idx]
             # get huffman code
             if table_index:
@@ -551,6 +550,28 @@ class MP3Encoder:
                 self.__huffman_code(table_index, x, y)
 
         # 2: Write count1 area
+        h = tables.huffman_table[self.__side_info.gr[gr].ch[ch].tt.count1table_select + 32]
+        count1_end = big_values + (self.__side_info.gr[gr].ch[ch].tt.count1 << 2)
+        for i in range(big_values, count1_end, 4):
+            v = self.__l3_enc[ch][gr][0][i]
+            w = self.__l3_enc[ch][gr][0][i + 1]
+            x = self.__l3_enc[ch][gr][0][i + 2]
+            y = self.__l3_enc[ch][gr][0][i + 3]
+            self.__huffman_coder_count1(h, v, w, x, y)
+
+        bits = util.get_bits_count(self.__bitstream) - bits
+        bits = self.__side_info.gr[gr].ch[ch].tt.part2_3_length - self.__side_info.gr[gr].ch[ch].tt.part2_length - bits
+        if bits:
+            stuffing_words = bits // 32
+            remaining_bits = bits % 32
+
+            # Due to the nature of the Huffman code tables, we will pad with ones * /
+            while stuffing_words:
+                self.__putbits(~0, 32)
+                if remaining_bits:
+                    self.__putbits((np.int64(1) << remaining_bits) - 1, remaining_bits)
+
+                stuffing_words -= 1
 
     def __huffman_code(self, table_select, x, y):
         code = 0
@@ -614,3 +635,6 @@ class MP3Encoder:
                 cbits += 1
 
             self.__putbits(code, cbits)
+
+    def __huffman_coder_count1(self, h, v, w, x, y):
+        pass
