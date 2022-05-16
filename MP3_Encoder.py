@@ -1,6 +1,7 @@
 from copy import copy
 from dataclasses import dataclass
 import math
+from os import write
 
 import tables
 from WAV_Reader import WavReader
@@ -278,7 +279,12 @@ class MP3Encoder:
         count = total_sample_count // samples_per_pass
 
         for i in range(count):
-            data = self.__encode_buffer_internal()
+            written, data = self.__encode_buffer_internal()
+            f = open(self.__wav_file.file_path[:-3] + "mp3", "a")
+            f.write(data[:written])
+            f.close()
+            # buffer += samples_per_pass
+            # TODO continue
 
     def __samples_per_pass(self):
         return self.__mpeg.granules_per_frame * util.GRANULE_SIZE
@@ -295,10 +301,15 @@ class MP3Encoder:
         self.__mdct_sub()  # TODO check for validity
 
         # bit and noise allocation
+        self.iteration_loop()   # TODO check for validity, and make private function
 
         # write the frame to the bitstream
         self.__format_bitstream()  # TODO check for validity
-        pass
+
+        written = self.__bitstream.data_position
+        self.__bitstream.data_position = 0
+
+        return written, self.__bitstream.data
 
     def __mdct_sub(self):
         # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
