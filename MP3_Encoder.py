@@ -150,20 +150,6 @@ class L3Loop:
         self.int2idx = np.zeros(10000, dtype=np.int32)
 
 
-@dataclass
-class HuffCodeTab:
-    table: np.array
-    hlen: np.array
-    xlen: int = 0
-    ylen: int = 0
-    linbits: int = 0
-    linmax: int = 0
-
-    def __init__(self):
-        self.table = np.zeros((self.xlen, self.ylen))
-        self.hlen = np.zeros((self.xlen, self.ylen))
-
-
 class MP3Encoder:
     def __init__(self, wav_file: WavReader):
         self.__wav_file = wav_file
@@ -513,7 +499,7 @@ class MP3Encoder:
                     for sfb in range(16, 21, 1):
                         self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
 
-                self.__huffman_code_bits()
+                self.__huffman_code_bits(gr, ch)
 
     # write N bits into the bit stream.
     # bs = bit stream structure
@@ -540,5 +526,91 @@ class MP3Encoder:
             else:
                 self.__bitstream.cache = 0
 
-    def __huffman_code_bits(self):
+    def __huffman_code_bits(self, gr, ch):
         scale_fac = tables.scale_fact_band_index[self.__mpeg.samplerate_index][0]
+
+        bits = util.get_bits_count(self.__bitstream)
+
+        # 1: Write the bigvalues
+        # gi = self.__side_info.gr[gr].ch[ch].tt
+        big_values = self.__side_info.gr[gr].ch[ch].tt.big_values << 1
+
+        scalefac_index = self.__side_info.gr[gr].ch[ch].tt.region0_count + 1
+        region1Start = scale_fac[scalefac_index]
+        scalefac_index += self.__side_info.gr[gr].ch[ch].tt.region1_count + 1
+        region2Start = scale_fac[scalefac_index]
+
+        for i in range(0, big_values, 2):
+            # get table pointer
+            idx = (i >= region1Start) + (i >= region2Start)
+            table_index = self.__side_info.gr[gr].ch[ch].tt.table_select[idx]
+            # get huffman code
+            if table_index:
+                x = self.__l3_enc[ch][gr][0][i]
+                y = self.__l3_enc[ch][gr][0][i + 1]
+                self.__huffman_code(table_index, x, y)
+
+        # 2: Write count1 area
+
+    def __huffman_code(self, table_select, x, y):
+        code = 0
+        ext = 0
+        cbits = 0
+        xbits = 0
+
+        x, signx = util.abs_and_sign(x)
+        y, signy = util.abs_and_sign(y)
+
+        h = tables.huffman_table[table_select]
+        ylen = h.ylen
+        if table_select > 15:  # ESC-table is used
+            linbitsx = 0
+            linbitsy = 0
+            linbits = h.linbits
+            if x > 14:
+                linbitsx = x - 15
+                x = 15
+
+            if y > 14:
+                linbitsy = y - 15
+                y = 15
+
+            idx = (x * ylen) + y
+            code = h.table[idx]
+            cbits = h.hlen[idx]
+
+            if x > 14:
+                ext |= linbitsx
+                xbits += linbits
+
+            if x != 0:
+                ext <<= 1
+                ext |= signx
+                xbits += 1
+
+            if y > 14:
+                ext <<= linbits
+                ext |= linbitsy
+                xbits += linbits
+            if y != 0:
+                ext <<= 1
+                ext |= signy
+                xbits += 1
+
+            self.__putbits(code, cbits)
+            self.__putbits(ext, xbits)
+        else:  # No ESC-words
+            idx = (x * ylen) + y
+            code = h.table[idx]
+            cbits = h.hlen[idx]
+            if x != 0:
+                code <<= 1
+                code |= signx
+                cbits += 1
+
+            if y != 0:
+                code <<= 1
+                code |= signy
+                cbits += 1
+
+            self.__putbits(code, cbits)

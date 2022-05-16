@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -248,6 +249,7 @@ t32l = [1, 4, 4, 5, 4, 6, 5, 6, 4, 5, 5, 6, 5, 6, 6, 6]
 t33l = [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
 
 
+@dataclass
 class HuffCodeTab:
     xlen: int  # max. x-index+
     ylen: int  # max. y-index+
