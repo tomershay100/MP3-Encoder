@@ -291,11 +291,19 @@ class MP3Encoder:
             written, data = self.__encode_buffer_internal()
             data_bytes = bytes(bytearray(data[:written]))
             f.write(data_bytes)
-        f.close()
 
         last = total_sample_count % samples_per_pass
         if last != 0:
-            cache = np.zeros(samples_per_pass, dtype='int16')
+            written, data = self.__encode_buffer_internal()
+            data_bytes = bytes(bytearray(data[:written]))
+            f.write(data_bytes)
+
+        # Flush and write remaining data.
+        written, data = self.__flush()
+        data_bytes = bytes(bytearray(data[:written]))
+        f.write(data_bytes)
+
+        f.close()
 
     def __samples_per_pass(self):
         return self.__mpeg.granules_per_frame * util.GRANULE_SIZE
@@ -1250,3 +1258,8 @@ class MP3Encoder:
             code = (code << 1) | signy
             cbits += 1
         self.__putbits(code, cbits)
+
+    def __flush(self):
+        written = self.__bitstream.data_position
+        self.__bitstream.data_position = 0
+        return written, self.__bitstream.data
