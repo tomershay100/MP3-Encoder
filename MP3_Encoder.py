@@ -314,6 +314,7 @@ class MP3Encoder:
 
         # bit and noise allocation
         self.__iteration_loop()
+
         # write the frame to the bitstream
         self.__format_bitstream()
 
@@ -398,7 +399,7 @@ class MP3Encoder:
 
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
-    def __window_filter_subband(self, s, ch):  # TODO check for validity
+    def __window_filter_subband(self, s, ch):
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
@@ -490,7 +491,7 @@ class MP3Encoder:
 
                 # all spectral values zero
                 if self.__l3loop.xrmax:
-                    cod_info.part2_3_length = self.__shine_outer_loop(max_bits, ix, gr, ch)
+                    cod_info.part2_3_length = self.__outer_loop(max_bits, ix, gr, ch)
 
                 # Re-adjust the size of the reservoir to reflect the granule's usage.
                 self.__resv_size += (self.__mpeg.mean_bits / self.__wav_file.num_of_channels) - cod_info.part2_3_length
@@ -611,7 +612,7 @@ class MP3Encoder:
     # It computes the best scalefac and global gain. This module calls the inner iteration loop.
     # l3_xmin - the allowed distortion of the scalefactor
     # ix - vector of quantized values ix(0..575)
-    def __shine_outer_loop(self, max_bits, ix, gr, ch):
+    def __outer_loop(self, max_bits, ix, gr, ch):
         side_info = self.__side_info
         cod_info = side_info.gr[gr].ch[ch].tt
 
