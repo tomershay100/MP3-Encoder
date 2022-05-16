@@ -333,17 +333,17 @@ class MP3Encoder:
                 # polyphase filtering
                 for k in range(0, 18, 2):
                     self.__l3_sb_sample[ch, gr + 1, k, :] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k], ch)
+                        self.__l3_sb_sample[ch, gr + 1, k, :], ch)
                     self.__l3_sb_sample[ch, gr + 1, k + 1, :] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k + 1], ch)
+                        self.__l3_sb_sample[ch, gr + 1, k + 1, :], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
-                    for band in range(1, 2, 32):
+                    for band in range(1, 32, 2):
                         self.__l3_sb_sample[ch][gr + 1][k + 1][band] *= -1
 
                 # Perform imdct of 18 previous subband samples + 18 current subband samples
-                for band in range(0, 32, 1):
+                for band in range(32):
                     for k in range(18 - 1, -1, -1):
                         mdct_in[k] = self.__l3_sb_sample[ch][gr][k][band]
                         mdct_in[k + 18] = self.__l3_sb_sample[ch][gr + 1][k][band]
@@ -391,7 +391,7 @@ class MP3Encoder:
                             tables.MDCT_CS7, tables.MDCT_CA7)
 
             # Save latest granule's subband samples to be used in the next mdct call
-            self.__l3_sb_sample[ch, 0, :, :] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
+            self.__l3_sb_sample[ch, 0, :, :] = self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame]
 
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
@@ -442,7 +442,6 @@ class MP3Encoder:
     # bit and noise allocation
     def __iteration_loop(self):
         l3_xmin = np.zeros((util.MAX_GRANULES, util.MAX_CHANNELS, 21), dtype=np.double)
-
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
             for gr in range(self.__mpeg.granules_per_frame):
                 # setup pointers
@@ -629,33 +628,285 @@ class MP3Encoder:
     def __bin_search_step_size(self, desired_rate, ix, cod_info):
         next = -120
         count = 120
+        bit = 0
 
-        # # TODO get do while out of comment
-        #
-        # condition = True
-        # while condition:
-        #     half = count // 2
-        #
-        #     if self.__quantize(ix, next + half) > 8192:
-        #         bit = 100000
-        #     else:
-        #         # TODO write these functions
-        #         self.__calc_runlen(ix, cod_info)  # rzero, count1, big_values
-        #         self.__bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
-        #         self.__subdivide(cod_info)  # bigvalues sfb division
-        #         self.__bigv_tab_select(ix, cod_info)  # codebook selection
-        #         bit += self.__bigv_bitcount(ix, cod_info)  # bitcount
-        #
-        #     if bit < desired_rate:
-        #         count = half
-        #     else:
-        #         next += half
-        #         count -= half
-        #
-        #     # End of loop body
-        #     condition = count > 1
+        condition = True
+        while condition:
+            half = count // 2
 
-        return 0  # TODO delete this line
+            if self.__quantize(ix, next + half) > 8192:
+                bit = 100000
+            else:
+                self.__calc_runlen(ix, cod_info)  # rzero, count1, big_values
+                self.__bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
+                self.__subdivide(cod_info)  # bigvalues sfb division
+                self.__bigv_tab_select(ix, cod_info)  # codebook selection
+                bit += self.__bigv_bitcount(ix, cod_info)  # bitcount
+
+            if bit < desired_rate:
+                count = half
+            else:
+                next += half
+                count -= half
+
+            # End of loop body
+            condition = count > 1
+
+        return next
+
+    # Calculation of rzero, count1, big_values (partitions ix into big values, quadruples and zeros).
+    def __calc_runlen(self, ix, cod_info):
+        rzero = 0
+        i = util.GRANULE_SIZE
+
+        while i > 1:
+            if ix[i - 1] == 0 and ix[i - 2] == 0:
+                rzero += 1
+                i -= 2
+            else:
+                break
+
+        cod_info.count1 = 0
+        while i > 3:
+            if ix[i - 1] <= 1 and ix[i - 2] <= 1 and ix[i - 3] <= 1 and ix[i - 4] <= 1:
+                cod_info.count1 += 1
+                i -= 4
+            else:
+                break
+
+        cod_info.big_values = i >> 1
+
+    # Determines the number of bits to encode the quadruples.
+    def __count1_bitcount(self, ix, cod_info):
+        i = cod_info.big_values << 1
+        sum0 = 0
+        sum1 = 0
+
+        for k in range(cod_info.count1):
+            v = ix[i]
+            w = ix[i + 1]
+            x = ix[i + 2]
+            y = ix[i + 3]
+
+            p = v + (w << 1) + (x << 2) + (y << 3)
+
+            signbits = 0
+            signbits += (v != 0)
+            signbits += (w != 0)
+            signbits += (x != 0)
+            signbits += (y != 0)
+
+            sum0 += signbits
+            sum1 += signbits
+
+            sum0 += tables.huffman_table[32].hlen[p]
+            sum1 += tables.huffman_table[32].hlen[p]
+
+            i += 4
+
+        if sum0 < sum1:
+            cod_info.count1table_select = 0
+            return sum0
+        else:
+            cod_info.count1table_select = 1
+            return sum1
+
+    # Presumable subdivides the bigvalue region which will use separate Huffman tables.
+    def __subdivide(self, cod_info):
+        if cod_info.big_values == 0:  # No big_values region
+            cod_info.region0_count = 0
+            cod_info.region1_count = 0
+        else:
+            temp_scale_fact_band_index = np.array(util.scale_fact_band_index)
+            scalefac_band_long = self.__mpeg.samplerate_index * temp_scale_fact_band_index.shape[1]
+            temp_scale_fact_band_index = temp_scale_fact_band_index.flatten()[scalefac_band_long:]
+            bigvalues_region = 2 * cod_info.big_values
+
+            # Calculate scfb_anz
+            scfb_anz = 0
+            while temp_scale_fact_band_index[scfb_anz] < bigvalues_region:
+                scfb_anz += 1
+
+            thiscount = tables.subdv_table[scfb_anz][0]
+            while thiscount > 0:
+                if temp_scale_fact_band_index[thiscount + 1] <= bigvalues_region:
+                    break
+                thiscount -= 1
+            cod_info.region0_count = thiscount
+            cod_info.address1 = temp_scale_fact_band_index[thiscount + 1]
+
+            temp_scale_fact_band_index = temp_scale_fact_band_index[thiscount + 1:]
+
+            thiscount = tables.subdv_table[scfb_anz][1]
+            while thiscount > 0:
+                if temp_scale_fact_band_index[thiscount + 1] <= bigvalues_region:
+                    break
+                thiscount -= 1
+            cod_info.region1_count = thiscount
+            cod_info.address2 = temp_scale_fact_band_index[thiscount + 1]
+
+            cod_info.address3 = bigvalues_region
+
+    # Select huffman code tables for bigvalues regions
+    def __bigv_tab_select(self, ix, cod_info):
+        cod_info.table_select[0] = 0 if cod_info.address1 <= 0 else self.__new_choose_table(ix, 0, cod_info.address1)
+        cod_info.table_select[1] = 0 if cod_info.address2 <= cod_info.address1 \
+            else self.__new_choose_table(ix, cod_info.address1, cod_info.address2)
+        cod_info.table_select[2] = 0 if (cod_info.big_values << 1) <= cod_info.address2 \
+            else self.__new_choose_table(ix, cod_info.address2, cod_info.big_values << 1)
+
+    # Choose the Huffman table that will encode ix[begin..end] with the fewest bits.
+    # Note: This code contains knowledge about the sizes and characteristics of the Huffman tables as defined in the
+    # specifications, and will not work with any arbitrary tables.
+    def __new_choose_table(self, ix, begin, end):
+        ix_max = np.max(np.array(ix[begin:end]))
+        if ix_max == 0:
+            return 0
+
+        choice = [0, 0]
+        ix_sum = [0, 0]
+        if ix_max < 15:
+            # Try tables with no linbits
+            for i in range(13, -1, -1):
+                if tables.huffman_table[i].xlen > ix_max:
+                    choice[0] = i
+                    break
+
+            ix_sum[0] = self.__count_bit(ix, begin, end, choice[0])
+
+            if choice[0] == 2:
+                ix_sum[1] = self.__count_bit(ix, begin, end, 3)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 3
+            elif choice[0] == 5:
+                ix_sum[1] = self.__count_bit(ix, begin, end, 6)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 6
+            elif choice[0] == 7:
+                ix_sum[1] = self.__count_bit(ix, begin, end, 8)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 8
+                ix_sum[1] = self.__count_bit(ix, begin, end, 9)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 9
+            elif choice[0] == 10:
+                ix_sum[1] = self.__count_bit(ix, begin, end, 11)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 11
+                ix_sum[1] = self.__count_bit(ix, begin, end, 12)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 12
+            elif choice[0] == 13:
+                ix_sum[1] = self.__count_bit(ix, begin, end, 15)
+                if ix_sum[1] <= ix_sum[0]:
+                    choice[0] = 15
+
+        else:
+            # Try tables with linbits.
+            ix_max -= 15
+
+            for i in range(15, 24):
+                if tables.huffman_table[i].linmax >= ix_max:
+                    choice[0] = i
+                    break
+
+            for i in range(24, 32):
+                if tables.huffman_table[i].linmax >= ix_max:
+                    choice[1] = i
+                    break
+
+            ix_sum[0] = self.__count_bit(ix, begin, end, choice[0])
+            ix_sum[1] = self.__count_bit(ix, begin, end, choice[1])
+            if ix_sum[1] < ix_sum[0]:
+                choice[0] = choice[1]
+
+        return choice[0]
+
+    # Count the number of bits necessary to code the subregion.
+    def __count_bit(self, ix, start, end, table):
+        if table == 0:
+            return 0
+
+        h = tables.huffman_table[table]
+        h_sum = 0
+        ylen = h.ylen
+        linbits = h.linbits
+
+        if table > 15:  # ESC-table is used
+            for i in range(start, end, 2):
+                x = ix[i]
+                y = ix[i + 1]
+                if x > 14:
+                    x = 15
+                    h_sum += linbits
+                if y > 14:
+                    y = 15
+                    h_sum += linbits
+
+                h_sum += h.hlen[(x * ylen) + y]
+                if x:
+                    h_sum += 1
+                if y:
+                    h_sum += 1
+
+        else:  # No ESC-words
+            for i in range(start, end, 2):
+                x = ix[i]
+                y = ix[i + 1]
+
+                h_sum += h.hlen[(x * ylen) + y]
+
+                if x != 0:
+                    h_sum += 1
+                if y != 0:
+                    h_sum += 1
+
+        return h_sum
+
+    # Count the number of bits necessary to code the bigvalues region.
+    def __bigv_bitcount(self, ix, cod_info):
+        bits = 0
+
+        table = cod_info.table_select[0]
+        if table:
+            bits += self.__count_bit(ix, 0, cod_info.address1, table)
+        table = cod_info.table_select[1]
+        if table:
+            bits += self.__count_bit(ix, cod_info.address1, cod_info.address2, table)
+        table = cod_info.table_select[2]
+        if table:
+            bits += self.__count_bit(ix, cod_info.address2, cod_info.address3, table)
+
+        return bits
+
+    def __quantize(self, ix, stepsize):
+        ix_max = 0
+        scalei = self.__l3loop.steptabi[stepsize + 127]  # 2**(-stepsize/4)
+
+        # A quick check to see if ixmax will be less than 8192
+        # This speeds up the early calls to bin_search_StepSize
+        if util.mulr(self.__l3loop.xrmax, scalei) > 165140:  # 8192**(4/3)
+            ix_max = 16384  # No point in continuing, step size not big enough
+        else:
+            for i in range(util.GRANULE_SIZE):
+                # This calculation is very sensitive. The multiply must round
+                # it's result or bad things happen to the quality.
+
+                ln = util.mulr(util.labs(self.__l3loop.xr[i]), scalei)
+
+                if ln < 10000:  # ln < 10000 catches most values
+                    ix[i] = self.__l3loop.int2idx[ln]  # Quick lookup method
+                else:
+                    # Outside table range so have to do it using floats
+                    scale = self.__l3loop.steptab[stepsize + 127]  # 2**(-stepsize/4)
+                    dbl = np.double(self.__l3loop.xrabs[i]) * scale * 4.656612875e-10  # 0x7fffffff
+                    ix[i] = int(np.sqrt(np.sqrt(dbl) * dbl))  # dbl**(3/4)
+
+                # calculate ixmax while we're here. note: ix cannot be negative
+                if ix_max < ix[i]:
+                    ix_max = ix[i]
+
+        return ix_max
 
     # calculates the number of bits needed to encode the scalefacs in the
     #  main data block.

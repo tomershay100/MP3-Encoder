@@ -124,6 +124,10 @@ def mulsr(a, b):
     b = np.int64(b)
     return np.int32((((a * b) + np.int64(1073741824)) >> 31))
 
+def mulr(a, b):
+    a = np.int64(a)
+    b = np.int64(b)
+    return np.int32((((a * b) + np.int64(2147483648)) >> 32))
 
 def mul(a, b):
     a = np.int64(a)
@@ -148,6 +152,9 @@ def labs(a):
     return np.abs(np.long(a))
 
 
+
+
+
 def get_bits_count(bitstream):
     return bitstream.data_position * 8 + 32 - bitstream.cache_bits
 
@@ -157,3 +164,4 @@ def abs_and_sign(x):
         return x, 0
     x *= -1
     return x, 1
+
