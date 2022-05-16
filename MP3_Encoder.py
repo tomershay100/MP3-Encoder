@@ -511,7 +511,7 @@ class MP3Encoder:
         # the total energy of the granule
         temp = 0
         for i in range(util.GRANULE_SIZE - 1, -1, -1):
-            temp += self.__l3loop.xrsq[i] >> 10  # a bit of scaling to avoid overflow
+            temp += np.right_shift(self.__l3loop.xrsq[i], 10)  # a bit of scaling to avoid overflow
 
         if temp:
             self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
@@ -526,7 +526,7 @@ class MP3Encoder:
 
             temp = 0
             for i in range(start, end):
-                temp += self.__l3loop.xrsq[i] >> 10
+                temp += np.right_shift(self.__l3loop.xrsq[i], 10)
             if temp:
                 self.__l3loop.en[gr][sfb] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
             else:
@@ -563,7 +563,7 @@ class MP3Encoder:
 
                     if sum0 < util.en_scfsi_band_krit and sum1 < util.xm_scfsi_band_krit:
                         l3_side.scfsi[ch][scfsi_band] = 1
-                        scfsi_set |= (1 << scfsi_band)
+                        scfsi_set |= np.int32(np.right_shift(np.int32(1),scfsi_band))
                     else:
                         l3_side.scfsi[ch][scfsi_band] = 0
 
@@ -674,7 +674,7 @@ class MP3Encoder:
             else:
                 break
 
-        cod_info.big_values = i >> 1
+        cod_info.big_values = np.right_shift(i,1)
 
     # Determines the number of bits to encode the quadruples.
     def __count1_bitcount(self, ix, cod_info):
@@ -1101,6 +1101,8 @@ class MP3Encoder:
             self.__bitstream.cache |= np.uint32(np.right_shift(val, np.uint32(N)))
 
             # write to data buffer
+            if self.__bitstream.data_position == 844:
+                pass
             temp_bytes = int(self.__bitstream.cache).to_bytes(4, "big")
             for i, b in enumerate(temp_bytes):
                 self.__bitstream.data[self.__bitstream.data_position + i] = b
