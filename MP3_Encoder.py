@@ -287,7 +287,6 @@ class MP3Encoder:
         total_sample_count = self.__wav_file.num_of_samples * self.__wav_file.num_of_channels
         count = total_sample_count // samples_per_pass
 
-        f = open(self.__wav_file.file_path[:-3] + "mp3", "wb")
         to_write = bytearray('', "utf-8")
         for i in range(count):
             written, data = self.__encode_buffer_internal()
@@ -301,6 +300,7 @@ class MP3Encoder:
         # Flush and write remaining data.
         written, data = self.__flush()
         to_write += bytearray(data[:written])
+        f = open(self.__wav_file.file_path[:-3] + "mp3", "wb")
         f.write(bytes(to_write))
         f.close()
 
