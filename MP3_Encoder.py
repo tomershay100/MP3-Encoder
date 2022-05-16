@@ -1097,18 +1097,18 @@ class MP3Encoder:
             table_index = self.__side_info.gr[gr].ch[ch].tt.table_select[idx]
             # get huffman code
             if table_index:
-                x = self.__l3_enc[ch][gr][0][i]
-                y = self.__l3_enc[ch][gr][0][i + 1]
+                x = self.__l3_enc[ch][gr][i]
+                y = self.__l3_enc[ch][gr][i + 1]
                 self.__huffman_code(table_index, x, y)
 
         # 2: Write count1 area
         h = tables.huffman_table[self.__side_info.gr[gr].ch[ch].tt.count1table_select + 32]
         count1_end = big_values + (self.__side_info.gr[gr].ch[ch].tt.count1 << 2)
         for i in range(big_values, count1_end, 4):
-            v = self.__l3_enc[ch][gr][0][i]
-            w = self.__l3_enc[ch][gr][0][i + 1]
-            x = self.__l3_enc[ch][gr][0][i + 2]
-            y = self.__l3_enc[ch][gr][0][i + 3]
+            v = self.__l3_enc[ch][gr][i]
+            w = self.__l3_enc[ch][gr][i + 1]
+            x = self.__l3_enc[ch][gr][i + 2]
+            y = self.__l3_enc[ch][gr][i + 3]
             self.__huffman_coder_count1(h, v, w, x, y)
 
         bits = util.get_bits_count(self.__bitstream) - bits
