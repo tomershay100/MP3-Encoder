@@ -700,7 +700,7 @@ class MP3Encoder:
             sum1 += signbits
 
             sum0 += tables.huffman_table[32].hlen[p]
-            sum1 += tables.huffman_table[32].hlen[p]
+            sum1 += tables.huffman_table[33].hlen[p]
 
             i += 4
 
