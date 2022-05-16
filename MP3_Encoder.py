@@ -292,12 +292,12 @@ class MP3Encoder:
         self.__mpeg.mean_bits = (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame
 
         # apply mdct to the polyphase output
-        self.__mdct_sub()   # TODO check for validity
+        self.__mdct_sub()  # TODO check for validity
 
         # bit and noise allocation
 
         # write the frame to the bitstream
-        self.__format_bitstream()   # TODO check for validity
+        self.__format_bitstream()  # TODO check for validity
         pass
 
     def __mdct_sub(self):
