@@ -51,13 +51,19 @@ class MPEG:
     original: int = 0
 
 
-@dataclass
 class BitstreamStruct:
     data: []  # Processed data
     data_size: int = 0  # Total data size
     data_position: int = 0  # Data position
     cache: int = 0  # bit stream cache
     cache_bits: int = 0  # free bits in cache
+
+    def __init__(self, data_size, data_position, cache, cache_bits):
+        self.data = np.zeros(data_size, dtype=np.uint8)
+        self.__data_size = data_size
+        self.__data_position = data_position
+        self.__cache = cache
+        self.__cache_bits = cache_bits
 
 
 @dataclass
@@ -205,7 +211,7 @@ class MP3Encoder:
         if self.__mpeg.frac_slots_per_frame == 0:
             self.__mpeg.padding = 0
 
-        self.__bitstream = BitstreamStruct([b'' for _ in range(util.BUFFER_SIZE)], util.BUFFER_SIZE, 0, 0, 32)
+        self.__bitstream = BitstreamStruct(util.BUFFER_SIZE, 0, 0, 32)
 
         # determine the mean bitrate for main data
         if self.__mpeg.granules_per_frame == 2:  # MPEG 1
@@ -559,15 +565,13 @@ class MP3Encoder:
     # val = value to write into the buffer
     # N = number of bits of val
     def __putbits(self, val, N):
+        val = int(val)
         if self.__bitstream.cache_bits > N:
             self.__bitstream.cache_bits -= N
             self.__bitstream.cache |= val << self.__bitstream.cache_bits
         else:
             if self.__bitstream.data_position + 1 >= self.__bitstream.data_size:
-                if not self.__bitstream.data:
-                    self.__bitstream.data = np.zeros(self.__bitstream.data_size + (self.__bitstream.data_size // 2))
-                else:
-                    self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
+                self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
                 self.__bitstream.data_size += self.__bitstream.data_size // 2
             N -= self.__bitstream.cache_bits
             self.__bitstream.cache |= val >> N
@@ -580,7 +584,7 @@ class MP3Encoder:
                 self.__bitstream.cache = 0
 
     def __huffman_code_bits(self, gr, ch):
-        scale_fac = tables.scale_fact_band_index[self.__mpeg.samplerate_index][0]
+        scale_fac = tables.scale_fact_band_index[self.__mpeg.samplerate_index]
 
         bits = util.get_bits_count(self.__bitstream)
 
