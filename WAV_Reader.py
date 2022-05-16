@@ -5,7 +5,8 @@ import util
 
 
 class WavReader:
-    def __init__(self, file_path, bit_rate=64):
+    # The encoder wil get the bitrate from the Decoder
+    def __init__(self, file_path, bit_rate=320):
         self.__file_path = file_path
         self.__bitrate = bit_rate
         self.__file = open(self.__file_path, 'rb')
@@ -45,7 +46,7 @@ class WavReader:
         idx += 2
         self.__num_of_ch = struct.unpack('<H', buffer[idx:idx + 2])[0]  # bytes 23 - 24
         if self.__num_of_ch > 1:  # Set to stereo mode if wave data is stereo, mono otherwise.
-            self.__mpeg_mode = self.__num_of_ch
+            self.__mpeg_mode = util.MODES["STEREO"]
         else:
             self.__mpeg_mode = util.MODES["MONO"]
 
@@ -80,7 +81,7 @@ class WavReader:
 
         self.__num_of_slots = 12 * self.__bitrate * 1000 // self.__samplerate
         self.__copyright = 0
-        self.__original = 0
+        self.__original = 1
         self.__chmode = 0b11 if self.__num_of_ch == 1 else 0b10
         self.__modext = 0b10
         self.__sync_word = 0b11111111111

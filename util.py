@@ -15,6 +15,11 @@ BUFFER_SIZE = 4096
 
 SFB_LMAX = 22
 
+en_tot_krit = 10
+en_dif_krit = 100
+en_scfsi_band_krit = 10
+xm_scfsi_band_krit = 10
+
 BIT_RATES = [
     # MPEG version:
     # 2.5, reserved, II, I
@@ -117,17 +122,19 @@ def find_mpeg_version(samplerate_index):
 def mulsr(a, b):
     a = np.int64(a)
     b = np.int64(b)
-    return np.int32((((a * b) + np.int64(1073741824)) >> 31))
+    return np.int32((np.right_shift(((a * b) + np.int64(1073741824)), 31)))
 
 
-def labs(a):
-    return np.abs(np.long(a))
+def mulr(a, b):
+    a = np.int64(a)
+    b = np.int64(b)
+    return np.int32((np.right_shift((a * b) + np.int64(2147483648), 32)))
 
 
 def mul(a, b):
     a = np.int64(a)
     b = np.int64(b)
-    tmp = (a * b) >> 32
+    tmp = np.right_shift((a * b), 32)
     return np.int32(tmp)
 
 
@@ -137,7 +144,22 @@ def cmuls(are, aim, bre, bim):
     bre = np.int64(bre)
     bim = np.int64(bim)
 
-    tre = np.int32((are[0] * bre[0] - aim[0] * bim[0]) >> 31)
-    dim = np.int32((are[0] * bim[0] + aim[0] * bre[0]) >> 31)
+    tre = np.int32(np.right_shift(are * bre - aim * bim, 31))
+    dim = np.int32(np.right_shift(are * bim + aim * bre, 31))
     dre = tre
-    return dim, dre
+    return dre, dim
+
+
+def labs(a):
+    return np.abs(np.long(a))
+
+
+def get_bits_count(bitstream):
+    return bitstream.data_position * 8 + 32 - bitstream.cache_bits
+
+
+def abs_and_sign(x):
+    if x > 0:
+        return x, 0
+    x *= -1
+    return x, 1
