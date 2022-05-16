@@ -312,7 +312,7 @@ class MP3Encoder:
         # bit and noise allocation
         self.__iteration_loop()
         # write the frame to the bitstream
-        self.__format_bitstream()  # TODO check for validity
+        self.__format_bitstream()
 
         written = self.__bitstream.data_position
         self.__bitstream.data_position = 0
@@ -806,24 +806,24 @@ class MP3Encoder:
         val = np.uint32(val)
         if self.__bitstream.cache_bits > N:
             self.__bitstream.cache_bits -= N
-            self.__bitstream.cache |= np.uint32(val << self.__bitstream.cache_bits)
+            self.__bitstream.cache |= np.uint32(np.left_shift(val, np.uint32(self.__bitstream.cache_bits)))
         else:
             if self.__bitstream.data_position + 4 >= self.__bitstream.data_size:
                 self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
                 self.__bitstream.data_size += self.__bitstream.data_size // 2
 
             N -= self.__bitstream.cache_bits
-            self.__bitstream.cache |= np.uint32(val >> N)
+            self.__bitstream.cache |= np.uint32(np.right_shift(val, np.uint32(N)))
 
-            # write to data buffer in little endian
-            temp_bytes = int(val).to_bytes(4, "little")
+            # write to data buffer
+            temp_bytes = int(self.__bitstream.cache).to_bytes(4, "big")
             for i, b in enumerate(temp_bytes):
                 self.__bitstream.data[self.__bitstream.data_position + i] = b
 
             self.__bitstream.data_position += 4
             self.__bitstream.cache_bits = 32 - N
             if N != 0:
-                self.__bitstream.cache = np.uint32(val << self.__bitstream.cache_bits)
+                self.__bitstream.cache = np.uint32(np.left_shift(val, np.uint32(self.__bitstream.cache_bits)))
             else:
                 self.__bitstream.cache = 0
 
@@ -869,10 +869,11 @@ class MP3Encoder:
             # Due to the nature of the Huffman code tables, we will pad with ones * /
             while stuffing_words:
                 self.__putbits(~0, 32)
-                if remaining_bits:
-                    self.__putbits((np.int64(1) << remaining_bits) - 1, remaining_bits)
-
                 stuffing_words -= 1
+
+            if remaining_bits:
+                self.__putbits(np.uint32(np.left_shift(np.uint32(np.uint64(1)), np.int(remaining_bits)) - 1),
+                               remaining_bits)
 
     def __huffman_code(self, table_select, x, y):
         ext = 0
