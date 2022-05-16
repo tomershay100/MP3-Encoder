@@ -264,7 +264,7 @@ class MP3Encoder:
 
         # quantize: vector conversion, three quarter power table.
         # The 0.5 is for rounding, the .0946 comes from the spec.
-        for i in range(128 - 1, -1, -1):
+        for i in range(10000 - 1, -1, -1):
             self.__l3loop.int2idx[i] = np.int32(math.sqrt(math.sqrt(np.double(i)) * np.double(i)) - 0.0946 + 0.5)
 
     def print_info(self):
@@ -288,22 +288,25 @@ class MP3Encoder:
         count = total_sample_count // samples_per_pass
 
         f = open(self.__wav_file.file_path[:-3] + "mp3", "wb")
+        to_write = bytearray('', "utf-8")
         for i in range(count):
             written, data = self.__encode_buffer_internal()
-            data_bytes = bytes(bytearray(data[:written]))
-            f.write(data_bytes)
+            # data_bytes = bytes(bytearray(data[:written]))
+            to_write += bytearray(data[:written])
+            # f.write(data_bytes)
 
         last = total_sample_count % samples_per_pass
         if last != 0:
             written, data = self.__encode_buffer_internal()
-            data_bytes = bytes(bytearray(data[:written]))
-            f.write(data_bytes)
+            # data_bytes = bytes(bytearray(data[:written]))
+            to_write += bytearray(data[:written])
+            # f.write(data_bytes)
 
         # Flush and write remaining data.
         written, data = self.__flush()
-        data_bytes = bytes(bytearray(data[:written]))
-        f.write(data_bytes)
-
+        # data_bytes = bytes(bytearray(data[:written]))
+        to_write += bytearray(data[:written])
+        f.write(bytes(to_write))
         f.close()
 
     def __samples_per_pass(self):
@@ -342,7 +345,7 @@ class MP3Encoder:
                 # set up pointer to the part of config.mdct_freq we're using
                 # mdct_enc = self.__mdct_freq[ch][gr]
 
-                jj=1
+                jj = 1
                 # polyphase filtering
                 for k in range(0, 18, 2):
                     self.__l3_sb_sample[ch, gr + 1, k, :] = self.__window_filter_subband(
@@ -469,10 +472,10 @@ class MP3Encoder:
                     if self.__l3loop.xrabs[i] > self.__l3loop.xrmax:
                         self.__l3loop.xrmax = self.__l3loop.xrabs[i]
 
-                cod_info = self.__side_info.gr[gr].ch[ch].tt
-                cod_info.sfb_lmax = util.SFB_LMAX - 1  # gr_deco
+                # cod_info = self.__side_info.gr[gr].ch[ch].tt
+                self.__side_info.gr[gr].ch[ch].tt.sfb_lmax = util.SFB_LMAX - 1  # gr_deco
 
-                l3_xmin[gr, ch, 0:cod_info.sfb_lmax] = 0
+                l3_xmin[gr, ch, 0:self.__side_info.gr[gr].ch[ch].tt.sfb_lmax] = 0
 
                 if self.__mpeg.version == util.MPEG_VERSIONS["MPEG_I"]:
                     self.__calc_scfsi(l3_xmin, ch, gr)
@@ -483,28 +486,32 @@ class MP3Encoder:
                 # reset of iteration variables
                 self.__scalefactor.l[gr][ch] = 0
                 self.__scalefactor.s[gr][ch] = 0
-                cod_info.slen[:] = 0
-                cod_info.part2_3_length = 0
-                cod_info.big_values = 0
-                cod_info.count1 = 0
-                cod_info.scalefac_compress = 0
-                cod_info.table_select[0] = 0
-                cod_info.table_select[1] = 0
-                cod_info.table_select[2] = 0
-                cod_info.region0_count = 0
-                cod_info.region1_count = 0
-                cod_info.part2_length = 0
-                cod_info.preflag = 0
-                cod_info.scalefac_scale = 0
-                cod_info.count1table_select = 0
+                self.__side_info.gr[gr].ch[ch].tt.slen[:] = 0
+                self.__side_info.gr[gr].ch[ch].tt.part2_3_length = 0
+                self.__side_info.gr[gr].ch[ch].tt.big_values = 0
+                self.__side_info.gr[gr].ch[ch].tt.count1 = 0
+                self.__side_info.gr[gr].ch[ch].tt.scalefac_compress = 0
+                self.__side_info.gr[gr].ch[ch].tt.table_select[0] = 0
+                self.__side_info.gr[gr].ch[ch].tt.table_select[1] = 0
+                self.__side_info.gr[gr].ch[ch].tt.table_select[2] = 0
+                self.__side_info.gr[gr].ch[ch].tt.region0_count = 0
+                self.__side_info.gr[gr].ch[ch].tt.region1_count = 0
+                self.__side_info.gr[gr].ch[ch].tt.part2_length = 0
+                self.__side_info.gr[gr].ch[ch].tt.preflag = 0
+                self.__side_info.gr[gr].ch[ch].tt.scalefac_scale = 0
+                self.__side_info.gr[gr].ch[ch].tt.count1table_select = 0
 
                 # all spectral values zero
                 if self.__l3loop.xrmax:
-                    cod_info.part2_3_length = self.__shine_outer_loop(max_bits, ix, gr, ch)
+                    self.__side_info.gr[gr].ch[ch].tt.part2_3_length = self.__shine_outer_loop(max_bits,
+                                                                                               self.__l3_enc[ch][gr],
+                                                                                               gr, ch)
 
                 # Re-adjust the size of the reservoir to reflect the granule's usage.
-                self.__resv_size += (self.__mpeg.mean_bits / self.__wav_file.num_of_channels) - cod_info.part2_3_length
-                cod_info.global_gain = cod_info.quantizerStepSize + 210
+                self.__resv_size += (self.__mpeg.mean_bits / self.__wav_file.num_of_channels) - \
+                                    self.__side_info.gr[gr].ch[ch].tt.part2_3_length
+                self.__side_info.gr[gr].ch[ch].tt.global_gain = self.__side_info.gr[gr].ch[
+                                                                    ch].tt.quantizerStepSize + 210
 
         self.__resv_frame_end()
 
@@ -651,7 +658,7 @@ class MP3Encoder:
                 bit = 100000
             else:
                 self.__calc_runlen(ix, cod_info)  # rzero, count1, big_values
-                self.__bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
+                bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
                 self.__subdivide(cod_info)  # bigvalues sfb division
                 self.__bigv_tab_select(ix, cod_info)  # codebook selection
                 bit += self.__bigv_bitcount(ix, cod_info)  # bitcount
@@ -989,21 +996,21 @@ class MP3Encoder:
 
         if stuffing_bits:
 
-            gi = l3_side.gr[0].ch[0].tt
+            # gi = l3_side.gr[0].ch[0].tt
 
-            if gi.part2_3_length + stuffing_bits < 4095:
+            if l3_side.gr[0].ch[0].tt.part2_3_length + stuffing_bits < 4095:
                 # plan a: put all into the first granule
-                gi.part2_3_length += stuffing_bits
+                l3_side.gr[0].ch[0].tt.part2_3_length += stuffing_bits
             else:
                 # plan b: distribute throughout the granules
                 for gr in range(self.__mpeg.granules_per_frame):
                     for ch in range(self.__wav_file.num_of_channels):
-                        gi = l3_side.gr[gr].ch[ch].tt
+                        # gi = l3_side.gr[gr].ch[ch].tt
                         if not stuffing_bits:
                             break
-                        extra_bits = 4095 - gi.part2_3_length
+                        extra_bits = 4095 - l3_side.gr[gr].ch[ch].tt.part2_3_length
                         bits_this_gr = extra_bits if extra_bits < stuffing_bits else stuffing_bits
-                        gi.part2_3_length += bits_this_gr
+                        l3_side.gr[gr].ch[ch].tt.part2_3_length += bits_this_gr
                         stuffing_bits -= bits_this_gr
 
                 # If any stuffing bits remain, we elect to spill them into ancillary data.
@@ -1114,8 +1121,8 @@ class MP3Encoder:
             self.__bitstream.cache |= np.uint32(np.right_shift(val, np.uint32(N)))
 
             # write to data buffer
-            if self.__bitstream.data_position == 844:
-                pass
+            if self.__bitstream.data_position == 4:
+                x = self.__bitstream.data_position
             temp_bytes = int(self.__bitstream.cache).to_bytes(4, "big")
             for i, b in enumerate(temp_bytes):
                 self.__bitstream.data[self.__bitstream.data_position + i] = b
