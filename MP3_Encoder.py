@@ -288,11 +288,14 @@ class MP3Encoder:
 
         for i in range(count):
             written, data = self.__encode_buffer_internal()
-            f = open(self.__wav_file.file_path[:-3] + "mp3", "a")
-            f.write(data[:written])
+            f = open(self.__wav_file.file_path[:-3] + "mp3", "wb")
+            data_bytes = bytes(bytearray(data[:written]))
+            f.write(data_bytes)
             f.close()
-            # buffer += samples_per_pass
-            # TODO continue
+
+        last = total_sample_count % samples_per_pass
+        if last != 0:
+            cache = np.zeros(samples_per_pass, dtype='int16')
 
     def __samples_per_pass(self):
         return self.__mpeg.granules_per_frame * util.GRANULE_SIZE
