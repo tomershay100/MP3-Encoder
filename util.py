@@ -148,8 +148,12 @@ def labs(a):
     return np.abs(np.long(a))
 
 
-def mul(a, b):
-    a_int64 = np.array([a], dtype='int64')
-    b_int64 = np.array([b], dtype='int64')
-    tmp = (a_int64[0] * b_int64[0]) >> 32
-    return np.array([tmp], dtype='int32')[0]
+def get_bits_count(bitstream):
+    return bitstream.data_position * 8 + 32 - bitstream.cache_bits
+
+
+def abs_and_sign(x):
+    if x > 0:
+        return x, 0
+    x *= -1
+    return x, 1

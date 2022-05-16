@@ -1,6 +1,8 @@
+import struct
 from copy import copy
 from dataclasses import dataclass
 import math
+from os import write
 
 import tables
 from WAV_Reader import WavReader
@@ -59,6 +61,13 @@ class BitstreamStruct:
     data_position: int = 0  # Data position
     cache: int = 0  # bit stream cache
     cache_bits: int = 0  # free bits in cache
+
+    def __init__(self, data_size, data_position, cache, cache_bits):
+        self.data = np.zeros(data_size, dtype=np.uint8)
+        self.data_size = data_size
+        self.data_position = data_position
+        self.cache = cache
+        self.cache_bits = cache_bits
 
 
 @dataclass
@@ -205,7 +214,7 @@ class MP3Encoder:
         if self.__mpeg.frac_slots_per_frame == 0:
             self.__mpeg.padding = 0
 
-        self.__bitstream = BitstreamStruct([b'' for _ in range(util.BUFFER_SIZE)], util.BUFFER_SIZE, 0, 0, 32)
+        self.__bitstream = BitstreamStruct(util.BUFFER_SIZE, 0, 0, 32)
 
         # determine the mean bitrate for main data
         if self.__mpeg.granules_per_frame == 2:  # MPEG 1
@@ -278,7 +287,12 @@ class MP3Encoder:
         count = total_sample_count // samples_per_pass
 
         for i in range(count):
-            data = self.__encode_buffer_internal()
+            written, data = self.__encode_buffer_internal()
+            f = open(self.__wav_file.file_path[:-3] + "mp3", "a")
+            f.write(data[:written])
+            f.close()
+            # buffer += samples_per_pass
+            # TODO continue
 
     def __samples_per_pass(self):
         return self.__mpeg.granules_per_frame * util.GRANULE_SIZE
@@ -298,8 +312,12 @@ class MP3Encoder:
         # bit and noise allocation
         self.__iteration_loop()
         # write the frame to the bitstream
-        self.__format_bitstream()
-        pass
+        self.__format_bitstream()  # TODO check for validity
+
+        written = self.__bitstream.data_position
+        self.__bitstream.data_position = 0
+
+        return written, self.__bitstream.data
 
     def __mdct_sub(self):
         # note. we wish to access the array 'config.mdct_freq[2][2][576]' as
@@ -378,7 +396,6 @@ class MP3Encoder:
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
     def __window_filter_subband(self, s, ch):  # TODO check for validity
-        buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
@@ -702,11 +719,244 @@ class MP3Encoder:
                     if self.__mdct_freq[ch][gr][i] < 0 and self.__l3_enc[ch][gr][i] > 0:
                         self.__l3_enc[ch][gr][i] *= -1
 
-        self.__encodeSideInfo()
-        self.__encodeMainData()
+        self.__encode_side_info()
+        self.__encode_main_data()
 
-    def __encodeSideInfo(self):
-        pass
+    def __encode_side_info(self):
 
-    def __encodeMainData(self):
-        pass
+        self.__putbits(0x7ff, 11)
+        self.__putbits(self.__mpeg.version, 2)
+        self.__putbits(self.__mpeg.layer, 2)
+        self.__putbits((0 if self.__mpeg.crc else 1), 1)
+        self.__putbits(self.__mpeg.bitrate_index, 4)
+        self.__putbits(self.__mpeg.samplerate_index % 3, 2)
+        self.__putbits(self.__mpeg.padding, 1)
+        self.__putbits(self.__mpeg.ext, 1)
+        self.__putbits(self.__mpeg.mode, 2)
+        self.__putbits(self.__mpeg.mode_ext, 2)
+        self.__putbits(self.__mpeg.copyright, 1)
+        self.__putbits(self.__mpeg.original, 1)
+        self.__putbits(self.__mpeg.emphasis, 2)
+
+        if self.__mpeg.version == 3:
+            self.__putbits(0, 9)
+            if self.__wav_file.num_of_channels == 2:
+                self.__putbits(self.__side_info.private_bits, 3)
+            else:
+                self.__putbits(self.__side_info.private_bits, 5)
+        else:
+            self.__putbits(0, 8)
+            if self.__wav_file.num_of_channels == 2:
+                self.__putbits(self.__side_info.private_bits, 2)
+            else:
+                self.__putbits(self.__side_info.private_bits, 1)
+
+        if self.__mpeg.version == 3:
+            for ch in range(self.__wav_file.num_of_channels):
+                for scfsi_band in range(4):
+                    self.__putbits(self.__side_info.scfsi[ch][scfsi_band], 1)
+
+        for gr in range(self.__mpeg.granules_per_frame):
+            for ch in range(self.__wav_file.num_of_channels):
+                # gi = self.__side_info.gr[gr].ch[ch].tt
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.part2_3_length, 12)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.big_values, 9)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.global_gain, 8)
+                if self.__mpeg.version == 3:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_compress, 4)
+                else:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_compress, 9)
+                self.__putbits(0, 1)
+                for region in range(3):
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.table_select[region], 5)
+
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.region0_count, 4)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.region1_count, 3)
+
+                if self.__mpeg.version == 3:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.preflag, 1)
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_scale, 1)
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.count1table_select, 1)
+
+    def __encode_main_data(self):
+        for gr in range(self.__mpeg.granules_per_frame):
+            for ch in range(self.__wav_file.num_of_channels):
+                slen1 = tables.slen1_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
+                slen2 = tables.slen2_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
+                if gr == 0 or self.__side_info.scfsi[ch][0] == 0:
+                    for sfb in range(6):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen1)
+                if gr == 0 or self.__side_info.scfsi[ch][1] == 0:
+                    for sfb in range(6, 11, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen1)
+                if gr == 0 or self.__side_info.scfsi[ch][2] == 0:
+                    for sfb in range(11, 16, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
+                if gr == 0 or self.__side_info.scfsi[ch][3] == 0:
+                    for sfb in range(16, 21, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
+
+                self.__huffman_code_bits(gr, ch)
+
+    # write N bits into the bit stream.
+    # bs = bit stream structure
+    # val = value to write into the buffer
+    # N = number of bits of val
+    def __putbits(self, val, N):
+        val = np.uint32(val)
+        if self.__bitstream.cache_bits > N:
+            self.__bitstream.cache_bits -= N
+            self.__bitstream.cache |= np.uint32(val << self.__bitstream.cache_bits)
+        else:
+            if self.__bitstream.data_position + 4 >= self.__bitstream.data_size:
+                self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
+                self.__bitstream.data_size += self.__bitstream.data_size // 2
+
+            N -= self.__bitstream.cache_bits
+            self.__bitstream.cache |= np.uint32(val >> N)
+
+            # write to data buffer in little endian
+            temp_bytes = int(val).to_bytes(4, "little")
+            for i, b in enumerate(temp_bytes):
+                self.__bitstream.data[self.__bitstream.data_position + i] = b
+
+            self.__bitstream.data_position += 4
+            self.__bitstream.cache_bits = 32 - N
+            if N != 0:
+                self.__bitstream.cache = np.uint32(val << self.__bitstream.cache_bits)
+            else:
+                self.__bitstream.cache = 0
+
+    def __huffman_code_bits(self, gr, ch):
+        scale_fac = tables.scale_fact_band_index[self.__mpeg.samplerate_index]
+
+        bits = util.get_bits_count(self.__bitstream)
+
+        # 1: Write the bigvalues
+        big_values = self.__side_info.gr[gr].ch[ch].tt.big_values << 1
+
+        scalefac_index = self.__side_info.gr[gr].ch[ch].tt.region0_count + 1
+        region1_start = scale_fac[scalefac_index]
+        scalefac_index += self.__side_info.gr[gr].ch[ch].tt.region1_count + 1
+        region2_start = scale_fac[scalefac_index]
+
+        for i in range(0, big_values, 2):
+            # get table pointer
+            idx = (i >= region1_start) + (i >= region2_start)
+            table_index = self.__side_info.gr[gr].ch[ch].tt.table_select[idx]
+            # get huffman code
+            if table_index:
+                x = self.__l3_enc[ch][gr][0][i]
+                y = self.__l3_enc[ch][gr][0][i + 1]
+                self.__huffman_code(table_index, x, y)
+
+        # 2: Write count1 area
+        h = tables.huffman_table[self.__side_info.gr[gr].ch[ch].tt.count1table_select + 32]
+        count1_end = big_values + (self.__side_info.gr[gr].ch[ch].tt.count1 << 2)
+        for i in range(big_values, count1_end, 4):
+            v = self.__l3_enc[ch][gr][0][i]
+            w = self.__l3_enc[ch][gr][0][i + 1]
+            x = self.__l3_enc[ch][gr][0][i + 2]
+            y = self.__l3_enc[ch][gr][0][i + 3]
+            self.__huffman_coder_count1(h, v, w, x, y)
+
+        bits = util.get_bits_count(self.__bitstream) - bits
+        bits = self.__side_info.gr[gr].ch[ch].tt.part2_3_length - self.__side_info.gr[gr].ch[ch].tt.part2_length - bits
+        if bits:
+            stuffing_words = bits // 32
+            remaining_bits = bits % 32
+
+            # Due to the nature of the Huffman code tables, we will pad with ones * /
+            while stuffing_words:
+                self.__putbits(~0, 32)
+                if remaining_bits:
+                    self.__putbits((np.int64(1) << remaining_bits) - 1, remaining_bits)
+
+                stuffing_words -= 1
+
+    def __huffman_code(self, table_select, x, y):
+        ext = 0
+        x_bits = 0
+
+        x, sign_x = util.abs_and_sign(x)
+        y, sign_y = util.abs_and_sign(y)
+
+        h = tables.huffman_table[table_select]
+        y_len = h.ylen
+        if table_select > 15:  # ESC-table is used
+            lin_bits_x = 0
+            lin_bits_y = 0
+            lin_bits = h.linbits
+            if x > 14:
+                lin_bits_x = x - 15
+                x = 15
+
+            if y > 14:
+                lin_bits_y = y - 15
+                y = 15
+
+            idx = (x * y_len) + y
+            code = h.table[idx]
+            c_bits = h.hlen[idx]
+
+            if x > 14:
+                ext |= lin_bits_x
+                x_bits += lin_bits
+
+            if x != 0:
+                ext <<= 1
+                ext |= sign_x
+                x_bits += 1
+
+            if y > 14:
+                ext <<= lin_bits
+                ext |= lin_bits_y
+                x_bits += lin_bits
+            if y != 0:
+                ext <<= 1
+                ext |= sign_y
+                x_bits += 1
+
+            self.__putbits(code, c_bits)
+            self.__putbits(ext, x_bits)
+        else:  # No ESC-words
+            idx = (x * y_len) + y
+            code = h.table[idx]
+            c_bits = h.hlen[idx]
+            if x != 0:
+                code <<= 1
+                code |= sign_x
+                c_bits += 1
+
+            if y != 0:
+                code <<= 1
+                code |= sign_y
+                c_bits += 1
+
+            self.__putbits(code, c_bits)
+
+    def __huffman_coder_count1(self, h, v, w, x, y):
+        code = 0
+        cbits = 0
+
+        v, signv = util.abs_and_sign(v)
+        w, signw = util.abs_and_sign(w)
+        x, signx = util.abs_and_sign(x)
+        y, signy = util.abs_and_sign(y)
+
+        p = v + (w << 1) + (x << 2) + (y << 3)
+        self.__putbits(h.table[p], h.hlen[p])
+
+        if v:
+            code = signv
+            cbits = 1
+        if w:
+            code = (code << 1) | signw
+            cbits += 1
+        if x:
+            code = (code << 1) | signx
+            cbits += 1
+        if y:
+            code = (code << 1) | signy
+            cbits += 1
+        self.__putbits(code, cbits)
