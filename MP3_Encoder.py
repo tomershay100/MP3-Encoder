@@ -690,4 +690,27 @@ class MP3Encoder:
             self.__putbits(code, cbits)
 
     def __huffman_coder_count1(self, h, v, w, x, y):
-        pass
+        code = 0
+        cbits = 0
+
+        v, signv = util.abs_and_sign(v)
+        w, signw = util.abs_and_sign(w)
+        x, signx = util.abs_and_sign(x)
+        y, signy = util.abs_and_sign(y)
+
+        p = v + (w << 1) + (x << 2) + (y << 3)
+        self.__putbits(h.table[p], h.hlen[p])
+
+        if v:
+            code = signv
+            cbits = 1
+        if w:
+            code = (code << 1) | signw
+            cbits += 1
+        if x:
+            code = (code << 1) | signx
+            cbits += 1
+        if y:
+            code = (code << 1) | signy
+            cbits += 1
+        self.__putbits(code, cbits)
