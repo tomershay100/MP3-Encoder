@@ -305,11 +305,11 @@ huffman_table = [HuffCodeTab(0, 0, 0, 0, None, None),
 
 # This is table B.9: coefficients for aliasing reduction
 def MDCT_CA(coef):
-    return np.array([(coef / math.sqrt(1.0 + (coef * coef)) * 0x7fffffff)], dtype='int32')[0]
+    return np.int32(coef / math.sqrt(np.double(1.0) + (coef * coef)) * 0x7fffffff)
 
 
 def MDCT_CS(coef):
-    return np.array([(1.0 / math.sqrt(1.0 + (coef * coef)) * 0x7fffffff)], dtype='int32')[0]
+    return np.int32(np.double(1.0) / math.sqrt(np.double(1.0) + (coef * coef)) * 0x7fffffff)
 
 
 MDCT_CA0 = MDCT_CA(-0.6)

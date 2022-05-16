@@ -147,7 +147,7 @@ def cmuls(are, aim, bre, bim):
     tre = np.int32(np.right_shift(are * bre - aim * bim, 31))
     dim = np.int32(np.right_shift(are * bim + aim * bre, 31))
     dre = tre
-    return dim, dre
+    return dre, dim
 
 
 def labs(a):
