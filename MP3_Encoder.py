@@ -1,3 +1,4 @@
+import struct
 from copy import copy
 from dataclasses import dataclass
 import math
@@ -60,10 +61,10 @@ class BitstreamStruct:
 
     def __init__(self, data_size, data_position, cache, cache_bits):
         self.data = np.zeros(data_size, dtype=np.uint8)
-        self.__data_size = data_size
-        self.__data_position = data_position
-        self.__cache = cache
-        self.__cache_bits = cache_bits
+        self.data_size = data_size
+        self.data_position = data_position
+        self.cache = cache
+        self.cache_bits = cache_bits
 
 
 @dataclass
@@ -565,21 +566,27 @@ class MP3Encoder:
     # val = value to write into the buffer
     # N = number of bits of val
     def __putbits(self, val, N):
-        val = int(val)
+        val = np.uint32(val)
         if self.__bitstream.cache_bits > N:
             self.__bitstream.cache_bits -= N
-            self.__bitstream.cache |= val << self.__bitstream.cache_bits
+            self.__bitstream.cache |= np.uint32(val << self.__bitstream.cache_bits)
         else:
-            if self.__bitstream.data_position + 1 >= self.__bitstream.data_size:
+            if self.__bitstream.data_position + 4 >= self.__bitstream.data_size:
                 self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
                 self.__bitstream.data_size += self.__bitstream.data_size // 2
-            N -= self.__bitstream.cache_bits
-            self.__bitstream.cache |= val >> N
 
-            self.__bitstream.data_position += 1
+            N -= self.__bitstream.cache_bits
+            self.__bitstream.cache |= np.uint32(val >> N)
+
+            # write to data buffer in little endian
+            temp_bytes = int(val).to_bytes(4, "little")
+            for i, b in enumerate(temp_bytes):
+                self.__bitstream.data[self.__bitstream.data_position + i] = b
+
+            self.__bitstream.data_position += 4
             self.__bitstream.cache_bits = 32 - N
             if N != 0:
-                self.__bitstream.cache = val << self.__bitstream.cache_bits
+                self.__bitstream.cache = np.uint32(val << self.__bitstream.cache_bits)
             else:
                 self.__bitstream.cache = 0
 
