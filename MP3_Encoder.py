@@ -150,6 +150,20 @@ class L3Loop:
         self.int2idx = np.zeros(10000, dtype=np.int32)
 
 
+@dataclass
+class HuffCodeTab:
+    table: np.array
+    hlen: np.array
+    xlen: int = 0
+    ylen: int = 0
+    linbits: int = 0
+    linmax: int = 0
+
+    def __init__(self):
+        self.table = np.zeros((self.xlen, self.ylen))
+        self.hlen = np.zeros((self.xlen, self.ylen))
+
+
 class MP3Encoder:
     def __init__(self, wav_file: WavReader):
         self.__wav_file = wav_file
@@ -482,4 +496,49 @@ class MP3Encoder:
         pass
 
     def __encodeMainData(self):
-        pass
+        for gr in range(self.__mpeg.granules_per_frame):
+            for ch in range(self.__wav_file.num_of_channels):
+                slen1 = tables.slen1_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
+                slen2 = tables.slen2_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
+                if gr == 0 or self.__side_info.scfsi[ch][0] == 0:
+                    for sfb in range(6):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen1)
+                if gr == 0 or self.__side_info.scfsi[ch][1] == 0:
+                    for sfb in range(6, 11, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen1)
+                if gr == 0 or self.__side_info.scfsi[ch][2] == 0:
+                    for sfb in range(11, 16, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
+                if gr == 0 or self.__side_info.scfsi[ch][3] == 0:
+                    for sfb in range(16, 21, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
+
+                self.__huffman_code_bits()
+
+    # write N bits into the bit stream.
+    # bs = bit stream structure
+    # val = value to write into the buffer
+    # N = number of bits of val
+    def __putbits(self, val, N):
+        if self.__bitstream.cache_bits > N:
+            self.__bitstream.cache_bits -= N
+            self.__bitstream.cache |= val << self.__bitstream.cache_bits
+        else:
+            if self.__bitstream.data_position + 1 >= self.__bitstream.data_size:
+                if not self.__bitstream.data:
+                    self.__bitstream.data = np.zeros(self.__bitstream.data_size + (self.__bitstream.data_size // 2))
+                else:
+                    self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
+                self.__bitstream.data_size += self.__bitstream.data_size // 2
+            N -= self.__bitstream.cache_bits
+            self.__bitstream.cache |= val >> N
+
+            self.__bitstream.data_position += 1
+            self.__bitstream.cache_bits = 32 - N
+            if N != 0:
+                self.__bitstream.cache = val << self.__bitstream.cache_bits
+            else:
+                self.__bitstream.cache = 0
+
+    def __huffman_code_bits(self):
+        scale_fac = tables.scale_fact_band_index[self.__mpeg.samplerate_index][0]
