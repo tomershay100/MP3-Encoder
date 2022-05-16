@@ -1,11 +1,14 @@
 import os
 import sys
+import time
 
 import util
 from MP3_Encoder import MP3Encoder
 from WAV_Reader import WavReader
 
 if __name__ == "__main__":
+    start = time.time()
+
     if len(sys.argv) > 2:
         sys.exit('Unexpected number of arguments.')
     if len(sys.argv) < 2:
@@ -19,3 +22,5 @@ if __name__ == "__main__":
     encoder = MP3Encoder(wav_file)
     encoder.print_info()
     encoder.encode()
+
+    print(f'Execution time: {int(time.time()-start)} seconds')
