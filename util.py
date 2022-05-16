@@ -153,3 +153,15 @@ def labs(a):
 
 
 
+
+
+def get_bits_count(bitstream):
+    return bitstream.data_position * 8 + 32 - bitstream.cache_bits
+
+
+def abs_and_sign(x):
+    if x > 0:
+        return x, 0
+    x *= -1
+    return x, 1
+
