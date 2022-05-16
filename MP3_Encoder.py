@@ -475,13 +475,66 @@ class MP3Encoder:
                     if self.__mdct_freq[ch][gr][i] < 0 and self.__l3_enc[ch][gr][i] > 0:
                         self.__l3_enc[ch][gr][i] *= -1
 
-        self.__encodeSideInfo()
-        self.__encodeMainData()
+        self.__encode_side_info()
+        self.__encode_main_data()
 
-    def __encodeSideInfo(self):
-        pass
+    def __encode_side_info(self):
 
-    def __encodeMainData(self):
+        self.__putbits(0x7ff, 11)
+        self.__putbits(self.__mpeg.version, 2)
+        self.__putbits(self.__mpeg.layer, 2)
+        self.__putbits((0 if self.__mpeg.crc else 1), 1)
+        self.__putbits(self.__mpeg.bitrate_index, 4)
+        self.__putbits(self.__mpeg.samplerate_index % 3, 2)
+        self.__putbits(self.__mpeg.padding, 1)
+        self.__putbits(self.__mpeg.ext, 1)
+        self.__putbits(self.__mpeg.mode, 2)
+        self.__putbits(self.__mpeg.mode_ext, 2)
+        self.__putbits(self.__mpeg.copyright, 1)
+        self.__putbits(self.__mpeg.original, 1)
+        self.__putbits(self.__mpeg.emphasis, 2)
+
+        if self.__mpeg.version == 3:
+            self.__putbits(0, 9)
+            if self.__wav_file.num_of_channels == 2:
+                self.__putbits(self.__side_info.private_bits, 3)
+            else:
+                self.__putbits(self.__side_info.private_bits, 5)
+        else:
+            self.__putbits(0, 8)
+            if self.__wav_file.num_of_channels == 2:
+                self.__putbits(self.__side_info.private_bits, 2)
+            else:
+                self.__putbits(self.__side_info.private_bits, 1)
+
+        if self.__mpeg.version == 3:
+            for ch in range(self.__wav_file.num_of_channels):
+                for scfsi_band in range(4):
+                    self.__putbits(self.__side_info.scfsi[ch][scfsi_band], 1)
+
+        for gr in range(self.__mpeg.granules_per_frame):
+            for ch in range(self.__wav_file.num_of_channels):
+                # gi = self.__side_info.gr[gr].ch[ch].tt
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.part2_3_length, 12)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.big_values, 9)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.global_gain, 8)
+                if self.__mpeg.version == 3:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_compress, 4)
+                else:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_compress, 9)
+                self.__putbits(0, 1)
+                for region in range(3):
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.table_select[region], 5)
+
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.region0_count, 4)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.region1_count, 3)
+
+                if self.__mpeg.version == 3:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.preflag, 1)
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_scale, 1)
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.count1table_select, 1)
+
+    def __encode_main_data(self):
         for gr in range(self.__mpeg.granules_per_frame):
             for ch in range(self.__wav_file.num_of_channels):
                 slen1 = tables.slen1_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
