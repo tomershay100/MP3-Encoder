@@ -225,16 +225,17 @@ class MP3Encoder:
     def __subband_initialise(self):
         for i in range(util.MAX_CHANNELS - 1, -1, -1):
             self.__subband.off[i] = 0
+            self.__subband.x[i][:] = 0
 
         for i in range(util.SBLIMIT - 1, -1, -1):
             for j in range(64 - 1, -1, -1):
-                filter = 1e9 * math.cos(((2 * i + 1) * (16 - j) * util.PI64))
+                filter = 1e9 * math.cos(np.double(((2 * i + 1) * (16 - j) * util.PI64)))
                 if filter >= 0:
                     filter = math.modf(filter + 0.5)[1]
                 else:
                     filter = math.modf(filter - 0.5)[1]
                 # scale and convert to fixed point before storing
-                self.__subband.fl[i][j] = int(filter * 0x7fffffff * 1e-9)
+                self.__subband.fl[i][j] = np.int32(filter * 0x7fffffff * 1e-9)
 
     def __mdct_initialise(self):
         # prepare the mdct coefficients
@@ -242,7 +243,7 @@ class MP3Encoder:
             for k in range(36 - 1, -1, -1):
                 # combine window and mdct coefficients into a single table
                 # scale and convert to fixed point before storing
-                self.__mdct.cos_l[m][k] = int(math.sin(util.PI36 * (k + 0.5)) * math.cos(
+                self.__mdct.cos_l[m][k] = np.int32(math.sin(util.PI36 * (k + 0.5)) * math.cos(
                     (util.PI / 72) * (2 * k + 19) * (2 * m + 1)) * 0x7fffffff)
 
     # Calculates the look up tables used by the iteration loop.
@@ -252,19 +253,19 @@ class MP3Encoder:
         # in the spec because it is quicker to do x*y than x/y.
         # The 0.5 is for rounding.
         for i in range(128 - 1, -1, -1):
-            self.__l3loop.steptab[i] = 2.0 ** (float(127 - i) / 4)
+            self.__l3loop.steptab[i] = 2.0 ** (np.double(127 - i) / 4)
             if self.__l3loop.steptab[i] * 2 > 0x7fffffff:  # MAXINT = 2**31 = 2**(124/4)
                 self.__l3loop.steptabi[i] = 0x7fffffff
             else:
                 # The table is multiplied by 2 to give an extra bit of accuracy.
                 # In quantize, the long multiply does not shift it's result left one
                 # bit to compensate.
-                self.__l3loop.steptabi[i] = int(self.__l3loop.steptab[i] * 2 + 0.5)
+                self.__l3loop.steptabi[i] = np.int32(self.__l3loop.steptab[i] * 2 + 0.5)
 
         # quantize: vector conversion, three quarter power table.
         # The 0.5 is for rounding, the .0946 comes from the spec.
-        for i in range(128 - 1, -1, -1):
-            self.__l3loop.int2idx[i] = int(math.sqrt(math.sqrt(float(i)) * float(i)) - 0.0946 + 0.5)
+        for i in range(10000 - 1, -1, -1):
+            self.__l3loop.int2idx[i] = np.int32(math.sqrt(math.sqrt(np.double(i)) * np.double(i)) - 0.0946 + 0.5)
 
     def print_info(self):
         # Print some info about the file about to be created
@@ -287,22 +288,20 @@ class MP3Encoder:
         count = total_sample_count // samples_per_pass
 
         f = open(self.__wav_file.file_path[:-3] + "mp3", "wb")
+        to_write = bytearray('', "utf-8")
         for i in range(count):
             written, data = self.__encode_buffer_internal()
-            data_bytes = bytes(bytearray(data[:written]))
-            f.write(data_bytes)
+            to_write += bytearray(data[:written])
 
         last = total_sample_count % samples_per_pass
         if last != 0:
             written, data = self.__encode_buffer_internal()
-            data_bytes = bytes(bytearray(data[:written]))
-            f.write(data_bytes)
+            to_write += bytearray(data[:written])
 
         # Flush and write remaining data.
         written, data = self.__flush()
-        data_bytes = bytes(bytearray(data[:written]))
-        f.write(data_bytes)
-
+        to_write += bytearray(data[:written])
+        f.write(bytes(to_write))
         f.close()
 
     def __samples_per_pass(self):
@@ -322,7 +321,6 @@ class MP3Encoder:
 
         # bit and noise allocation
         self.__iteration_loop()
-
         # write the frame to the bitstream
         self.__format_bitstream()
 
@@ -342,6 +340,7 @@ class MP3Encoder:
                 # set up pointer to the part of config.mdct_freq we're using
                 # mdct_enc = self.__mdct_freq[ch][gr]
 
+                jj = 1
                 # polyphase filtering
                 for k in range(0, 18, 2):
                     self.__l3_sb_sample[ch, gr + 1, k, :] = self.__window_filter_subband(
@@ -403,7 +402,7 @@ class MP3Encoder:
                             tables.MDCT_CS7, tables.MDCT_CA7)
 
             # Save latest granule's subband samples to be used in the next mdct call
-            self.__l3_sb_sample[ch, 0, :, :] = self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame]
+            self.__l3_sb_sample[ch, 0, :, :] = self.__l3_sb_sample[ch, self.__mpeg.granules_per_frame, :, :]
 
         self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
 
@@ -499,7 +498,7 @@ class MP3Encoder:
 
                 # all spectral values zero
                 if self.__l3loop.xrmax:
-                    cod_info.part2_3_length = self.__outer_loop(max_bits, ix, gr, ch)
+                    cod_info.part2_3_length = self.__shine_outer_loop(max_bits, ix, gr, ch)
 
                 # Re-adjust the size of the reservoir to reflect the granule's usage.
                 self.__resv_size += (self.__mpeg.mean_bits / self.__wav_file.num_of_channels) - cod_info.part2_3_length
@@ -523,7 +522,7 @@ class MP3Encoder:
         # the total energy of the granule
         temp = 0
         for i in range(util.GRANULE_SIZE - 1, -1, -1):
-            temp += self.__l3loop.xrsq[i] >> 10  # a bit of scaling to avoid overflow
+            temp += np.right_shift(self.__l3loop.xrsq[i], 10)  # a bit of scaling to avoid overflow
 
         if temp:
             self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
@@ -538,7 +537,7 @@ class MP3Encoder:
 
             temp = 0
             for i in range(start, end):
-                temp += self.__l3loop.xrsq[i] >> 10
+                temp += np.right_shift(self.__l3loop.xrsq[i], 10)
             if temp:
                 self.__l3loop.en[gr][sfb] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
             else:
@@ -575,7 +574,7 @@ class MP3Encoder:
 
                     if sum0 < util.en_scfsi_band_krit and sum1 < util.xm_scfsi_band_krit:
                         l3_side.scfsi[ch][scfsi_band] = 1
-                        scfsi_set |= (1 << scfsi_band)
+                        scfsi_set |= np.int32(np.left_shift(np.int32(1), scfsi_band))
                     else:
                         l3_side.scfsi[ch][scfsi_band] = 0
 
@@ -620,7 +619,7 @@ class MP3Encoder:
     # It computes the best scalefac and global gain. This module calls the inner iteration loop.
     # l3_xmin - the allowed distortion of the scalefactor
     # ix - vector of quantized values ix(0..575)
-    def __outer_loop(self, max_bits, ix, gr, ch):
+    def __shine_outer_loop(self, max_bits, ix, gr, ch):
         side_info = self.__side_info
         cod_info = side_info.gr[gr].ch[ch].tt
 
@@ -650,7 +649,7 @@ class MP3Encoder:
                 bit = 100000
             else:
                 self.__calc_runlen(ix, cod_info)  # rzero, count1, big_values
-                self.__bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
+                bit = self.__count1_bitcount(ix, cod_info)  # count1_table selection
                 self.__subdivide(cod_info)  # bigvalues sfb division
                 self.__bigv_tab_select(ix, cod_info)  # codebook selection
                 bit += self.__bigv_bitcount(ix, cod_info)  # bitcount
@@ -686,7 +685,7 @@ class MP3Encoder:
             else:
                 break
 
-        cod_info.big_values = i >> 1
+        cod_info.big_values = np.right_shift(i, 1)
 
     # Determines the number of bits to encode the quadruples.
     def __count1_bitcount(self, ix, cod_info):
