@@ -292,31 +292,31 @@ class MP3Encoder:
         self.__mpeg.mean_bits = (self.__mpeg.bits_per_frame - self.__side_info_len) / self.__mpeg.granules_per_frame
 
         # apply mdct to the polyphase output
-        self.__mdct_sub()
+        self.__mdct_sub()  # TODO check for validity
 
         # bit and noise allocation
 
         # write the frame to the bitstream
-
+        self.__format_bitstream()  # TODO check for validity
         pass
 
     def __mdct_sub(self):
         # note. we wish to access the array 'config->mdct_freq[2][2][576]' as
         # [2][2][32][18]. (32*18=576),
-        mdct_enc = np.zeros(18, dtype=np.int32)
+        self.__mdct_freq = self.__mdct_freq.reshape((2, 2, 32, 18))
         mdct_in = np.zeros(36, dtype=np.int32)
 
         for ch in range(self.__wav_file.num_of_channels - 1, -1, -1):
             for gr in range(self.__mpeg.granules_per_frame):
                 # set up pointer to the part of config->mdct_freq we're using
-                mdct_enc = self.__mdct_freq[ch][gr]
+                # mdct_enc = self.__mdct_freq[ch][gr]
 
                 # polyphase filtering
                 for k in range(0, 2, 18):
-                    self.__l3_sb_sample[ch][gr + 1][k][0] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k][0], ch)
-                    self.__l3_sb_sample[ch][gr + 1][k + 1][0] = self.__window_filter_subband(
-                        self.__l3_sb_sample[ch][gr + 1][k + 1][0], ch)
+                    self.__l3_sb_sample[ch][gr + 1][k] = self.__window_filter_subband(
+                        self.__l3_sb_sample[ch][gr + 1][k], ch)
+                    self.__l3_sb_sample[ch][gr + 1][k + 1] = self.__window_filter_subband(
+                        self.__l3_sb_sample[ch][gr + 1][k + 1], ch)
 
                     # Compensate for inversion in the analysis filter
                     # (every odd index of band AND k)
@@ -342,44 +342,46 @@ class MP3Encoder:
                             vm += util.mul(mdct_in[j - 5], self.__mdct.cos_l[k][j - 5])
                             vm += util.mul(mdct_in[j - 6], self.__mdct.cos_l[k][j - 6])
                             vm += util.mul(mdct_in[j - 7], self.__mdct.cos_l[k][j - 7])
-                        mdct_enc[band][k] = vm
+                        self.__mdct_freq[ch][gr][band][k] = vm
 
                     # Perform aliasing reduction butterfly
                     if band != 0:
-                        mdct_enc[band][0], mdct_enc[band - 1][17 - 0] = util.cmuls(mdct_enc[band][0],
-                                                                                   mdct_enc[band - 1][17 - 0],
-                                                                                   tables.MDCT_CS0, tables.MDCT_CA0)
-                        mdct_enc[band][1], mdct_enc[band - 1][17 - 1] = util.cmuls(mdct_enc[band][1],
-                                                                                   mdct_enc[band - 1][17 - 1],
-                                                                                   tables.MDCT_CS1, tables.MDCT_CA1)
-                        mdct_enc[band][2], mdct_enc[band - 1][17 - 2] = util.cmuls(mdct_enc[band][2],
-                                                                                   mdct_enc[band - 1][17 - 2],
-                                                                                   tables.MDCT_CS2, tables.MDCT_CA2)
-                        mdct_enc[band][3], mdct_enc[band - 1][17 - 3] = util.cmuls(mdct_enc[band][3],
-                                                                                   mdct_enc[band - 1][17 - 3],
-                                                                                   tables.MDCT_CS3, tables.MDCT_CA3)
-                        mdct_enc[band][4], mdct_enc[band - 1][17 - 4] = util.cmuls(mdct_enc[band][4],
-                                                                                   mdct_enc[band - 1][17 - 4],
-                                                                                   tables.MDCT_CS4, tables.MDCT_CA4)
-                        mdct_enc[band][5], mdct_enc[band - 1][17 - 5] = util.cmuls(mdct_enc[band][5],
-                                                                                   mdct_enc[band - 1][17 - 5],
-                                                                                   tables.MDCT_CS5, tables.MDCT_CA5)
-                        mdct_enc[band][6], mdct_enc[band - 1][17 - 6] = util.cmuls(mdct_enc[band][6],
-                                                                                   mdct_enc[band - 1][17 - 6],
-                                                                                   tables.MDCT_CS6, tables.MDCT_CA6)
-                        mdct_enc[band][7], mdct_enc[band - 1][17 - 7] = util.cmuls(mdct_enc[band][7],
-                                                                                   mdct_enc[band - 1][17 - 7],
-                                                                                   tables.MDCT_CS7, tables.MDCT_CA7)
+                        self.__mdct_freq[ch][gr][band][0], self.__mdct_freq[ch][gr][band - 1][17 - 0] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][0], self.__mdct_freq[ch][gr][band - 1][17 - 0],
+                            tables.MDCT_CS0, tables.MDCT_CA0)
+                        self.__mdct_freq[ch][gr][band][1], self.__mdct_freq[ch][gr][band - 1][17 - 1] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][1], self.__mdct_freq[ch][gr][band - 1][17 - 1],
+                            tables.MDCT_CS1, tables.MDCT_CA1)
+                        self.__mdct_freq[ch][gr][band][2], self.__mdct_freq[ch][gr][band - 1][17 - 2] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][2], self.__mdct_freq[ch][gr][band - 1][17 - 2],
+                            tables.MDCT_CS2, tables.MDCT_CA2)
+                        self.__mdct_freq[ch][gr][band][3], self.__mdct_freq[ch][gr][band - 1][17 - 3] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][3], self.__mdct_freq[ch][gr][band - 1][17 - 3],
+                            tables.MDCT_CS3, tables.MDCT_CA3)
+                        self.__mdct_freq[ch][gr][band][4], self.__mdct_freq[ch][gr][band - 1][17 - 4] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][4], self.__mdct_freq[ch][gr][band - 1][17 - 4],
+                            tables.MDCT_CS4, tables.MDCT_CA4)
+                        self.__mdct_freq[ch][gr][band][5], self.__mdct_freq[ch][gr][band - 1][17 - 5] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][5], self.__mdct_freq[ch][gr][band - 1][17 - 5],
+                            tables.MDCT_CS5, tables.MDCT_CA5)
+                        self.__mdct_freq[ch][gr][band][6], self.__mdct_freq[ch][gr][band - 1][17 - 6] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][6], self.__mdct_freq[ch][gr][band - 1][17 - 6],
+                            tables.MDCT_CS6, tables.MDCT_CA6)
+                        self.__mdct_freq[ch][gr][band][7], self.__mdct_freq[ch][gr][band - 1][17 - 7] = util.cmuls(
+                            self.__mdct_freq[ch][gr][band][7], self.__mdct_freq[ch][gr][band - 1][17 - 7],
+                            tables.MDCT_CS7, tables.MDCT_CA7)
 
             # Save latest granule's subband samples to be used in the next mdct call
             self.__l3_sb_sample[ch][0] = copy(self.__l3_sb_sample[ch][self.__mpeg.granules_per_frame])
 
-    def __window_filter_subband(self, s, ch):  # TODO check for validity
+        self.__mdct_freq = self.__mdct_freq.reshape((util.MAX_CHANNELS, util.MAX_GRANULES, util.GRANULE_SIZE))
+
+    def __window_filter_subband(self, s, ch):
         buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
         y = np.zeros(64, dtype=np.int32)
         # replace 32 oldest samples with 32 new samples
         for i in range(32 - 1, -1, -1):
-            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16  # TODO check for validity
+            self.__subband.x[ch][i + self.__subband.off[ch]] = int(buffer[0]) << 16
             self.__wav_file.set_buffer_pos(ch, 2)
             buffer = self.__wav_file.buffer[self.__wav_file.get_buffer_pos(ch):]
 
@@ -465,3 +467,248 @@ class MP3Encoder:
 
         if temp:
             self.__l3loop.en_tot[gr] = np.log(np.double(temp * 4.768371584e-7)) / util.LN2
+
+    def __format_bitstream(self):
+        for ch in range(self.__wav_file.num_of_channels):
+            for gr in range(self.__mpeg.granules_per_frame):
+                for i in range(util.GRANULE_SIZE):
+                    if self.__mdct_freq[ch][gr][i] < 0 and self.__l3_enc[ch][gr][i] > 0:
+                        self.__l3_enc[ch][gr][i] *= -1
+
+        self.__encode_side_info()
+        self.__encode_main_data()
+
+    def __encode_side_info(self):
+
+        self.__putbits(0x7ff, 11)
+        self.__putbits(self.__mpeg.version, 2)
+        self.__putbits(self.__mpeg.layer, 2)
+        self.__putbits((0 if self.__mpeg.crc else 1), 1)
+        self.__putbits(self.__mpeg.bitrate_index, 4)
+        self.__putbits(self.__mpeg.samplerate_index % 3, 2)
+        self.__putbits(self.__mpeg.padding, 1)
+        self.__putbits(self.__mpeg.ext, 1)
+        self.__putbits(self.__mpeg.mode, 2)
+        self.__putbits(self.__mpeg.mode_ext, 2)
+        self.__putbits(self.__mpeg.copyright, 1)
+        self.__putbits(self.__mpeg.original, 1)
+        self.__putbits(self.__mpeg.emphasis, 2)
+
+        if self.__mpeg.version == 3:
+            self.__putbits(0, 9)
+            if self.__wav_file.num_of_channels == 2:
+                self.__putbits(self.__side_info.private_bits, 3)
+            else:
+                self.__putbits(self.__side_info.private_bits, 5)
+        else:
+            self.__putbits(0, 8)
+            if self.__wav_file.num_of_channels == 2:
+                self.__putbits(self.__side_info.private_bits, 2)
+            else:
+                self.__putbits(self.__side_info.private_bits, 1)
+
+        if self.__mpeg.version == 3:
+            for ch in range(self.__wav_file.num_of_channels):
+                for scfsi_band in range(4):
+                    self.__putbits(self.__side_info.scfsi[ch][scfsi_band], 1)
+
+        for gr in range(self.__mpeg.granules_per_frame):
+            for ch in range(self.__wav_file.num_of_channels):
+                # gi = self.__side_info.gr[gr].ch[ch].tt
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.part2_3_length, 12)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.big_values, 9)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.global_gain, 8)
+                if self.__mpeg.version == 3:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_compress, 4)
+                else:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_compress, 9)
+                self.__putbits(0, 1)
+                for region in range(3):
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.table_select[region], 5)
+
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.region0_count, 4)
+                self.__putbits(self.__side_info.gr[gr].ch[ch].tt.region1_count, 3)
+
+                if self.__mpeg.version == 3:
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.preflag, 1)
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.scalefac_scale, 1)
+                    self.__putbits(self.__side_info.gr[gr].ch[ch].tt.count1table_select, 1)
+
+    def __encode_main_data(self):
+        for gr in range(self.__mpeg.granules_per_frame):
+            for ch in range(self.__wav_file.num_of_channels):
+                slen1 = tables.slen1_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
+                slen2 = tables.slen2_tab[self.__side_info.gr[gr].ch[ch].tt.scalefac_compress]
+                if gr == 0 or self.__side_info.scfsi[ch][0] == 0:
+                    for sfb in range(6):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen1)
+                if gr == 0 or self.__side_info.scfsi[ch][1] == 0:
+                    for sfb in range(6, 11, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen1)
+                if gr == 0 or self.__side_info.scfsi[ch][2] == 0:
+                    for sfb in range(11, 16, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
+                if gr == 0 or self.__side_info.scfsi[ch][3] == 0:
+                    for sfb in range(16, 21, 1):
+                        self.__putbits(self.__scalefactor.l[gr][ch][sfb], slen2)
+
+                self.__huffman_code_bits(gr, ch)
+
+    # write N bits into the bit stream.
+    # bs = bit stream structure
+    # val = value to write into the buffer
+    # N = number of bits of val
+    def __putbits(self, val, N):
+        if self.__bitstream.cache_bits > N:
+            self.__bitstream.cache_bits -= N
+            self.__bitstream.cache |= val << self.__bitstream.cache_bits
+        else:
+            if self.__bitstream.data_position + 1 >= self.__bitstream.data_size:
+                if not self.__bitstream.data:
+                    self.__bitstream.data = np.zeros(self.__bitstream.data_size + (self.__bitstream.data_size // 2))
+                else:
+                    self.__bitstream.data = np.append(self.__bitstream.data, np.zeros(self.__bitstream.data_size // 2))
+                self.__bitstream.data_size += self.__bitstream.data_size // 2
+            N -= self.__bitstream.cache_bits
+            self.__bitstream.cache |= val >> N
+
+            self.__bitstream.data_position += 1
+            self.__bitstream.cache_bits = 32 - N
+            if N != 0:
+                self.__bitstream.cache = val << self.__bitstream.cache_bits
+            else:
+                self.__bitstream.cache = 0
+
+    def __huffman_code_bits(self, gr, ch):
+        scale_fac = tables.scale_fact_band_index[self.__mpeg.samplerate_index][0]
+
+        bits = util.get_bits_count(self.__bitstream)
+
+        # 1: Write the bigvalues
+        big_values = self.__side_info.gr[gr].ch[ch].tt.big_values << 1
+
+        scalefac_index = self.__side_info.gr[gr].ch[ch].tt.region0_count + 1
+        region1_start = scale_fac[scalefac_index]
+        scalefac_index += self.__side_info.gr[gr].ch[ch].tt.region1_count + 1
+        region2_start = scale_fac[scalefac_index]
+
+        for i in range(0, big_values, 2):
+            # get table pointer
+            idx = (i >= region1_start) + (i >= region2_start)
+            table_index = self.__side_info.gr[gr].ch[ch].tt.table_select[idx]
+            # get huffman code
+            if table_index:
+                x = self.__l3_enc[ch][gr][0][i]
+                y = self.__l3_enc[ch][gr][0][i + 1]
+                self.__huffman_code(table_index, x, y)
+
+        # 2: Write count1 area
+        h = tables.huffman_table[self.__side_info.gr[gr].ch[ch].tt.count1table_select + 32]
+        count1_end = big_values + (self.__side_info.gr[gr].ch[ch].tt.count1 << 2)
+        for i in range(big_values, count1_end, 4):
+            v = self.__l3_enc[ch][gr][0][i]
+            w = self.__l3_enc[ch][gr][0][i + 1]
+            x = self.__l3_enc[ch][gr][0][i + 2]
+            y = self.__l3_enc[ch][gr][0][i + 3]
+            self.__huffman_coder_count1(h, v, w, x, y)
+
+        bits = util.get_bits_count(self.__bitstream) - bits
+        bits = self.__side_info.gr[gr].ch[ch].tt.part2_3_length - self.__side_info.gr[gr].ch[ch].tt.part2_length - bits
+        if bits:
+            stuffing_words = bits // 32
+            remaining_bits = bits % 32
+
+            # Due to the nature of the Huffman code tables, we will pad with ones * /
+            while stuffing_words:
+                self.__putbits(~0, 32)
+                if remaining_bits:
+                    self.__putbits((np.int64(1) << remaining_bits) - 1, remaining_bits)
+
+                stuffing_words -= 1
+
+    def __huffman_code(self, table_select, x, y):
+        ext = 0
+        x_bits = 0
+
+        x, sign_x = util.abs_and_sign(x)
+        y, sign_y = util.abs_and_sign(y)
+
+        h = tables.huffman_table[table_select]
+        y_len = h.ylen
+        if table_select > 15:  # ESC-table is used
+            lin_bits_x = 0
+            lin_bits_y = 0
+            lin_bits = h.linbits
+            if x > 14:
+                lin_bits_x = x - 15
+                x = 15
+
+            if y > 14:
+                lin_bits_y = y - 15
+                y = 15
+
+            idx = (x * y_len) + y
+            code = h.table[idx]
+            c_bits = h.hlen[idx]
+
+            if x > 14:
+                ext |= lin_bits_x
+                x_bits += lin_bits
+
+            if x != 0:
+                ext <<= 1
+                ext |= sign_x
+                x_bits += 1
+
+            if y > 14:
+                ext <<= lin_bits
+                ext |= lin_bits_y
+                x_bits += lin_bits
+            if y != 0:
+                ext <<= 1
+                ext |= sign_y
+                x_bits += 1
+
+            self.__putbits(code, c_bits)
+            self.__putbits(ext, x_bits)
+        else:  # No ESC-words
+            idx = (x * y_len) + y
+            code = h.table[idx]
+            c_bits = h.hlen[idx]
+            if x != 0:
+                code <<= 1
+                code |= sign_x
+                c_bits += 1
+
+            if y != 0:
+                code <<= 1
+                code |= sign_y
+                c_bits += 1
+
+            self.__putbits(code, c_bits)
+
+    def __huffman_coder_count1(self, h, v, w, x, y):
+        code = 0
+        cbits = 0
+
+        v, signv = util.abs_and_sign(v)
+        w, signw = util.abs_and_sign(w)
+        x, signx = util.abs_and_sign(x)
+        y, signy = util.abs_and_sign(y)
+
+        p = v + (w << 1) + (x << 2) + (y << 3)
+        self.__putbits(h.table[p], h.hlen[p])
+
+        if v:
+            code = signv
+            cbits = 1
+        if w:
+            code = (code << 1) | signw
+            cbits += 1
+        if x:
+            code = (code << 1) | signx
+            cbits += 1
+        if y:
+            code = (code << 1) | signy
+            cbits += 1
+        self.__putbits(code, cbits)

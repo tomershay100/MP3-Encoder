@@ -133,8 +133,8 @@ def cmuls(are, aim, bre, bim):
     bre = np.int64(bre)
     bim = np.int64(bim)
 
-    tre = np.int32((are[0] * bre[0] - aim[0] * bim[0]) >> 31)
-    dim = np.int32((are[0] * bim[0] + aim[0] * bre[0]) >> 31)
+    tre = np.int32((are * bre - aim * bim) >> 31)
+    dim = np.int32((are * bim + aim * bre) >> 31)
     dre = tre
     return dim, dre
 
@@ -143,8 +143,12 @@ def labs(a):
     return np.abs(np.long(a))
 
 
-def mul(a, b):
-    a_int64 = np.array([a], dtype='int64')
-    b_int64 = np.array([b], dtype='int64')
-    tmp = (a_int64[0] * b_int64[0]) >> 32
-    return np.array([tmp], dtype='int32')[0]
+def get_bits_count(bitstream):
+    return bitstream.data_position * 8 + 32 - bitstream.cache_bits
+
+
+def abs_and_sign(x):
+    if x > 0:
+        return x, 0
+    x *= -1
+    return x, 1
